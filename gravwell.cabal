@@ -12,3 +12,5 @@ executable gravwell
   ghc-options: -Wall
   main-is: Main.hs
   other-modules:
+    Game
+    Card
