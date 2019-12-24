@@ -37,7 +37,6 @@ getInt =
   getLine >>=
     ( readMaybe >>> maybe getInt pure )
 
-initialGame = undefined
 displayGame = print
 displayOutput = print @()
 gameOver = const False

@@ -4,7 +4,7 @@ data Card = Card
   { cardSymbol :: String
   , cardAmount :: Int
   , cardType   :: CardType
-  } deriving stock ( Show )
+  } deriving stock ( Show, Eq )
 
-data CardType = Fuel | Repulsor | Tractor
-  deriving stock ( Show )
+data CardType = Fuel -- | Repulsor | Tractor
+  deriving stock ( Show, Eq )
