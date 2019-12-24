@@ -1,0 +1,1 @@
+-c "cabal v2-repl -O0" --restart gravwell.cabal

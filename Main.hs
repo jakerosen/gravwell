@@ -1,6 +1,12 @@
 module Main where
 
+import Control.Category ((>>>))
 import Data.Foldable (for_)
+import Data.Function (fix)
+import Data.Functor ((<&>))
+import Text.Read (readMaybe)
+
+import Game
 
 
 main :: IO ()
@@ -19,14 +25,19 @@ loop game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    (game', outputs) -> do
-      for_ outputs displayOutput
-      _ <- getLine
-      loop game'
+    RoundBegun next -> do
+      putStrLn "Pick a card."
 
-type Game = ()
-initialGame = ()
+      fix \again ->
+        ( getInt <&> next ) >>=
+          maybe again loop
+
+getInt :: IO Int
+getInt =
+  getLine >>=
+    ( readMaybe >>> maybe getInt pure )
+
+initialGame = undefined
 displayGame = print
 displayOutput = print @()
 gameOver = const False
-gameState = const ((), [()])
