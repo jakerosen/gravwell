@@ -1,9 +1,11 @@
 module Game where
 
-import Data.List (sort)
+-- import Data.List (sort)
 
+-- import Debug.Trace
 import Card
 import Data.List
+import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -18,7 +20,8 @@ data Game = Game
 
 instance Show GameState where
   show = \case
-    RoundBegun{} -> "RoundBegun"
+    RoundBegan{} -> "RoundBegan"
+    DraftBegan{} -> "DraftBegan"
 
 -- | Returns 1 (forwards), -1 (backwards), or 0 (nowhere) per the natural motion
 -- direction of the given index in the game.
@@ -29,28 +32,34 @@ gameMotion game index =
     EQ -> 0
     GT -> 1
   where
-    comp1 = compare closestShipBehind (closestShipAhead :: Int)
-    comp2 = compare numShipsBehind (numShipsAhead :: Int)
+    comp1 = compare closestShipBehind (closestShipAhead)
+    comp2 = compare numShipsBehind (numShipsAhead)
 
-    closestShipBehind = undefined
-    closestShipAhead = undefined
-    numShipsBehind = undefined
-    numShipsAhead = undefined
+    (shipsBehind, shipsAhead) = Set.split index ships
 
+    closestShipBehind = fromMaybe minBound (Set.lookupMax shipsBehind)
+    closestShipAhead = fromMaybe maxBound (Set.lookupMin shipsAhead)
+    numShipsBehind = length shipsBehind
+    numShipsAhead = length shipsAhead
+
+    ships :: Set Int
     ships = gameShips game
 
--- | Positions of all ships in the game, in ascending order.
-gameShips :: Game -> [Int]
+-- | Positions of all ships in the game
+gameShips :: Game -> Set Int
 gameShips game =
-  sort
+  Set.fromList
     [ gameShip game
     , gameDerelict1 game
     , gameDerelict2 game
     ]
-data GameState = RoundBegun (Int -> Maybe Game)
+data GameState =
+    RoundBegan (Int -> Maybe Game)
+  | DraftBegan Game
 
+-- The initial game state
 initialGame :: Game
-initialGame =
+initialGame = setStateDraftBegan
   Game
     { gameHand = [ Card "A" 1 Fuel
                  , Card "B" 2 Fuel
@@ -62,18 +71,37 @@ initialGame =
     , gameShip = 0
     , gameDerelict1 = 10
     , gameDerelict2 = 20
-    , gameState = undefined
+    , gameState = undefined -- intentionally undefined, will be set later
     }
 
-setStateRoundBegun :: Game -> Game
-setStateRoundBegun game0 = game1
+-- Sets the game state of this Game to RoundBegan
+setStateRoundBegan :: Game -> Game
+setStateRoundBegan game0 = game1
   where
     f :: Int -> Maybe Game
     f x = Just $ handlePlayCard x game1
 
     game1 :: Game
-    game1 = game0 { gameState = RoundBegun f }
+    game1 = game0 { gameState = RoundBegan f }
 
+setStateDraftBegan :: Game -> Game
+setStateDraftBegan game0 = game1
+  where
+    game1 :: Game
+    game1 = game0 { gameState = DraftBegan game2 }
+
+    game2 :: Game
+    game2 = setStateRoundBegan game1
+      { gameHand = [ Card "A" 1 Fuel
+                 , Card "B" 2 Fuel
+                 , Card "C" 3 Fuel
+                 , Card "D" 4 Fuel
+                 , Card "E" 5 Fuel
+                 , Card "F" 6 Fuel
+                 ] }
+
+-- Play the Card at this index and determine the resulting game
+-- This must be a valid index
 handlePlayCard :: Int -> Game -> Game
 handlePlayCard x game0 =
   let
@@ -83,28 +111,31 @@ handlePlayCard x game0 =
     if x < 0 || x >= len then error "Invalid card index"
       else let
           (card :: Card, game1 :: Game) = pluck x game0
-          game2 = undefined
-        in game2
+          game2 = playCard card game1
+        in setStateRoundBegan game2
 
+-- Pluck a card at this index out of the player's hand.
+-- This must be a valid index
 pluck :: Int -> Game -> (Card, Game)
-pluck x game =
+pluck index game =
   let
-    card = gameHand game !! x
-    game = game { gameHand = delete card (gameHand game) }
-  in (card, game)
+    card = gameHand game !! index
+    game' = game { gameHand = delete card (gameHand game) }
+  in (card, game')
 
+-- Play this Card and determine the resulting Game
 playCard :: Card -> Game -> Game
 playCard card game = case cardType card of
   Fuel ->
     let
       motion :: Int
-      motion = undefined -- gameMotion
+      motion = gameMotion game (gameShip game)
 
       move :: Int
       move = motion * cardAmount card
 
       occupiedSpaces :: Set Int
-      occupiedSpaces = Set.fromList undefined -- gameShips
+      occupiedSpaces = gameShips game
 
       openPos :: Int -> Int
       openPos pos = if pos `Set.member` occupiedSpaces

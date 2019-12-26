@@ -1,7 +1,7 @@
 module Main where
 
 import Control.Category ((>>>))
-import Data.Foldable (for_)
+-- import Data.Foldable (for_)
 import Data.Function (fix)
 import Data.Functor ((<&>))
 import Text.Read (readMaybe)
@@ -25,18 +25,27 @@ loop game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    RoundBegun next -> do
+    RoundBegan next -> do
       putStrLn "Pick a card."
 
       fix \again ->
         ( getInt <&> next ) >>=
           maybe again loop
+    DraftBegan next -> do
+      putStrLn "Press enter to draft."
+      _ <- getLine
+      loop next
 
 getInt :: IO Int
 getInt =
   getLine >>=
     ( readMaybe >>> maybe getInt pure )
 
+displayGame :: Game -> IO ()
 displayGame = print
-displayOutput = print @()
+
+
+-- displayOutput = print @()
+
+gameOver :: b -> Bool
 gameOver = const False
