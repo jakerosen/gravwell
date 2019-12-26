@@ -2,7 +2,7 @@ module Game where
 
 -- import Data.List (sort)
 
--- import Debug.Trace
+import Debug.Trace
 import Card
 import Data.List
 import Data.Maybe
@@ -22,6 +22,7 @@ instance Show GameState where
   show = \case
     RoundBegan{} -> "RoundBegan"
     DraftBegan{} -> "DraftBegan"
+    RoundEnded{} -> "RoundEnded"
 
 -- | Returns 1 (forwards), -1 (backwards), or 0 (nowhere) per the natural motion
 -- direction of the given index in the game.
@@ -32,8 +33,8 @@ gameMotion game index =
     EQ -> 0
     GT -> 1
   where
-    comp1 = compare closestShipBehind (closestShipAhead)
-    comp2 = compare numShipsBehind (numShipsAhead)
+    comp1 = compare closestShipAhead closestShipBehind
+    comp2 = compare numShipsBehind numShipsAhead
 
     (shipsBehind, shipsAhead) = Set.split index ships
 
@@ -56,6 +57,7 @@ gameShips game =
 data GameState =
     RoundBegan (Int -> Maybe Game)
   | DraftBegan Game
+  | RoundEnded Game
 
 -- The initial game state
 initialGame :: Game
@@ -84,6 +86,7 @@ setStateRoundBegan game0 = game1
     game1 :: Game
     game1 = game0 { gameState = RoundBegan f }
 
+-- Sets the game state of this Game to DraftBegan
 setStateDraftBegan :: Game -> Game
 setStateDraftBegan game0 = game1
   where
@@ -92,27 +95,39 @@ setStateDraftBegan game0 = game1
 
     game2 :: Game
     game2 = setStateRoundBegan game1
-      { gameHand = [ Card "A" 1 Fuel
-                 , Card "B" 2 Fuel
-                 , Card "C" 3 Fuel
-                 , Card "D" 4 Fuel
-                 , Card "E" 5 Fuel
-                 , Card "F" 6 Fuel
-                 ] }
+      { gameHand =
+        [ Card "A" 1 Fuel
+        , Card "B" 2 Fuel
+        , Card "C" 3 Fuel
+        , Card "D" 4 Fuel
+        , Card "E" 5 Fuel
+        , Card "F" 6 Fuel
+        ] }
+
+-- Sets the game state of this Game to RoundEnded
+setStateRoundEnded :: Game -> Game
+setStateRoundEnded game0 = game1
+  where
+    game1 :: Game
+    game1 = game0 { gameState = RoundEnded game2 }
+
+    game2 :: Game
+    game2 = setStateDraftBegan game1
 
 -- Play the Card at this index and determine the resulting game
 -- This must be a valid index
 handlePlayCard :: Int -> Game -> Game
 handlePlayCard x game0 =
   let
-    len :: Int
-    len = length (gameHand game0)
-  in
-    if x < 0 || x >= len then error "Invalid card index"
-      else let
-          (card :: Card, game1 :: Game) = pluck x game0
-          game2 = playCard card game1
-        in setStateRoundBegan game2
+    handSize :: Int
+    handSize = length (gameHand game0)
+  in if x < 0 || x >= handSize then error "Invalid card index" else
+    let
+      (card :: Card, game1 :: Game) = pluck x game0
+      game2 = if handSize == 1
+        then playCard card (setStateRoundEnded game1)
+        else playCard card (setStateRoundBegan game1)
+    in game2
 
 -- Pluck a card at this index out of the player's hand.
 -- This must be a valid index
@@ -142,12 +157,13 @@ playCard card game = case cardType card of
         then openPos (pos + motion)
         else pos
 
+      -- TODO playCard seems to work incorrectly
       newPosition :: Int
-      newPosition = if motion == 0
+      newPosition = max 0 $ if motion == 0
         then gameShip game + move
         else openPos (gameShip game + move)
 
       game' = game { gameShip = newPosition }
-    in game'
+    in trace (show motion) game'
   -- Repulsor -> undefined
   -- Tractor -> undefined

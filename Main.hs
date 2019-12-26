@@ -35,6 +35,11 @@ loop' game = do
       putStrLn "Press enter to draft."
       _ <- getLine
       loop next
+    RoundEnded next -> do
+      putStrLn "Press enter to go to the next round."
+      _ <- getLine
+      loop next
+
 
 getInt :: IO Int
 getInt =
