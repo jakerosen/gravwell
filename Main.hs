@@ -59,9 +59,6 @@ getInt =
   getLine >>=
     ( readMaybe >>> maybe getInt pure )
 
-drawShip :: Int -> Int -> (String -> String) -> IO ()
-drawShip x y color = Ansi.setCursorPosition x y >> putStr ( color ">" )
-
 displayGame :: Game -> IO ()
 displayGame game = do
   Ansi.setCursorPosition 0 0
@@ -82,6 +79,9 @@ displayGame game = do
     red = style ( fg Ansi.Red )
     fg c = Ansi.SetColor Ansi.Foreground Ansi.Vivid c
     style c s = Ansi.setSGRCode [ c ] ++ s ++ Ansi.setSGRCode [ Ansi.Reset ]
+
+    drawShip :: Int -> Int -> (String -> String) -> IO ()
+    drawShip x y color = Ansi.setCursorPosition x y >> putStr ( color ">" )
 
 gameOver :: Game -> Bool
 gameOver game = gameShip game >= 30
