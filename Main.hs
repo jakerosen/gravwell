@@ -1,5 +1,6 @@
 module Main where
 
+import System.Random (StdGen, getStdGen)
 import Control.Category ((>>>))
 import Data.Functor ((<&>))
 import Data.Maybe
@@ -20,7 +21,9 @@ debug =
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-  loop initialGame
+
+  random :: StdGen <- getStdGen
+  loop (initialGame random)
 
 loop :: Game -> IO ()
 loop game = do

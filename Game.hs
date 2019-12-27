@@ -5,6 +5,9 @@ module Game where
 
 -- import Debug.Trace
 import Card
+import System.Random (StdGen)
+import qualified System.Random as Random
+import System.Random.Shuffle (shuffle')
 import Control.Monad
 import Data.List
 -- import Data.Maybe
@@ -18,6 +21,7 @@ data Game = Game
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
+  , gameRandom :: StdGen
   } deriving stock (Show)
 
 instance Show GameState where
@@ -71,14 +75,15 @@ data GameState =
   | RoundEnded Game
 
 -- The initial game state
-initialGame :: Game
-initialGame = setStateDraftBegan
+initialGame :: StdGen -> Game
+initialGame random = setStateDraftBegan
   Game
     { gameHand = []
     , gameShip = 0
     , gameDerelict1 = 10
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
+    , gameRandom = random
     }
 
 -- Sets the game state of this Game to RoundBegan
@@ -86,7 +91,9 @@ setStateRoundBegan :: Game -> Game
 setStateRoundBegan game0 = game1
   where
     f :: Int -> Maybe Game
-    f x = Just $ handlePlayCard x game1
+    f x = if x > length (gameHand game1)
+      then Nothing
+      else Just $ handlePlayCard x game1
 
     game1 :: Game
     game1 = game0 { gameState = RoundBegan f }
@@ -100,14 +107,21 @@ setStateDraftBegan game0 = game1
 
     game2 :: Game
     game2 = setStateRoundBegan game1
-      { gameHand =
-        [ Card "A" 1 Fuel
-        , Card "B" 2 Fuel
-        , Card "C" 3 Fuel
-        , Card "D" 4 Fuel
-        , Card "E" 5 Fuel
-        , Card "F" 6 Fuel
-        ] }
+      { gameHand = draftHand
+      , gameRandom = ran2
+      }
+
+    (ran1, ran2) = Random.split (gameRandom game1)
+
+    draftHand :: [Card]
+    draftHand = take 6 $ shuffle' deck 26 ran1
+      -- [ Card "A" 1 Fuel
+      -- , Card "B" 2 Fuel
+      -- , Card "C" 3 Fuel
+      -- , Card "D" 4 Fuel
+      -- , Card "E" 5 Fuel
+      -- , Card "F" 6 Fuel
+      -- ]
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game

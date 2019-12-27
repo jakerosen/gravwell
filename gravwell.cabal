@@ -8,6 +8,8 @@ executable gravwell
     ansi-terminal,
     base,
     containers,
+    random,
+    random-shuffle,
     pretty-simple,
   default-extensions:
     BlockArguments
