@@ -59,6 +59,9 @@ getInt =
   getLine >>=
     ( readMaybe >>> maybe getInt pure )
 
+drawShip :: Int -> Int -> (String -> String) -> IO ()
+drawShip x y color = Ansi.setCursorPosition x y >> putStr ( color ">" )
+
 displayGame :: Game -> IO ()
 displayGame game = do
   Ansi.setCursorPosition 0 0
@@ -67,9 +70,9 @@ displayGame game = do
   if debug then
     pPrint game
   else do
-    Ansi.setCursorPosition 1 ( gameShip game ) >> putStr ( blue ">" )
-    Ansi.setCursorPosition 1 ( gameDerelict1 game ) >> putStr ( red ">" )
-    Ansi.setCursorPosition 1 ( gameDerelict2 game ) >> putStr ( red ">" )
+    drawShip 1 (gameShip game) blue
+    drawShip 1 (gameDerelict1 game) red
+    drawShip 1 (gameDerelict2 game) red
 
     Ansi.setCursorPosition 3 0
     putStrLn "Run with 'debug' environment var to see game state instead.\n"
