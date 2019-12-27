@@ -17,6 +17,7 @@ main = do
 
 loop :: Game -> IO ()
 loop game = do
+  validateGame game
   displayGame game
   if gameOver game
     then putStrLn "Game over!"

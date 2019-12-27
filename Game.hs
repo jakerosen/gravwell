@@ -1,11 +1,13 @@
+{-# language RecordWildCards #-}
 module Game where
 
 -- import Data.List (sort)
 
 -- import Debug.Trace
 import Card
+import Control.Monad
 import Data.List
-import Data.Maybe
+-- import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -54,12 +56,15 @@ gameMotion game index =
 
 -- | Positions of all ships in the game
 gameShips :: Game -> Set Int
-gameShips game =
-  Set.fromList
-    [ gameShip game
-    , gameDerelict1 game
-    , gameDerelict2 game
-    ]
+gameShips = Set.fromList . gameShipsList
+
+gameShipsList :: Game -> [Int]
+gameShipsList game =
+  [ gameShip game
+  , gameDerelict1 game
+  , gameDerelict2 game
+  ]
+
 data GameState =
     RoundBegan (Int -> Maybe Game)
   | DraftBegan Game
@@ -168,3 +173,21 @@ playCard card game = case cardType card of
     in game { gameShip = newPosition }
   -- Repulsor -> undefined
   -- Tractor -> undefined
+
+validateGame :: Game -> IO ()
+validateGame game@(Game { .. })  = do
+  when (length gameHand > 6) (die "Hand exceeded 6 cards")
+  when (any (<0) (gameShips game)) (die "Ship index cannot be negative")
+  do
+    let
+      xs :: [Int]
+      xs = filter (/=0) (gameShipsList game)
+
+    when (length xs /= length (nub xs))
+      (die "Ships cannot be on top of each other outside of singularity")
+
+  where
+    die :: [Char] -> IO ()
+    die s = do
+      print game
+      fail s
