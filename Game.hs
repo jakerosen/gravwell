@@ -91,7 +91,7 @@ setStateRoundBegan :: Game -> Game
 setStateRoundBegan game0 = game1
   where
     f :: Int -> Maybe Game
-    f x = if x > length (gameHand game1)
+    f x = if x >= length (gameHand game1)
       then Nothing
       else Just $ handlePlayCard x game1
 
@@ -115,13 +115,6 @@ setStateDraftBegan game0 = game1
 
     draftHand :: [Card]
     draftHand = take 6 $ shuffle' deck 26 ran1
-      -- [ Card "A" 1 Fuel
-      -- , Card "B" 2 Fuel
-      -- , Card "C" 3 Fuel
-      -- , Card "D" 4 Fuel
-      -- , Card "E" 5 Fuel
-      -- , Card "F" 6 Fuel
-      -- ]
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game
