@@ -76,7 +76,7 @@ displayGame game@Game{..} = do
   if debug then
     pPrint game
   else do
-    drawShip 1 gameShip blue
+    -- drawShip 1 gameShip blue
     drawShip 1 gameDerelict1 red
     drawShip 1 gameDerelict2 red
 
@@ -87,7 +87,8 @@ displayGame game@Game{..} = do
           pure ( n + m + 2 )
       )
       0
-      gameHand
+      -- gameHand
+      (undefined :: [Card])
 
     Ansi.setCursorPosition 5 0
     putStrLn "Run with 'debug' environment var to see game state instead.\n"
@@ -117,7 +118,7 @@ style :: Ansi.SGR -> [ Char ] -> [ Char ]
 style c s = Ansi.setSGRCode [ c ] ++ s ++ Ansi.setSGRCode [ Ansi.Reset ]
 
 gameOver :: Game -> Bool
-gameOver game = gameShip game >= 30
+gameOver game = undefined --gameShip game >= 30
 
 foldlM_
   :: ( Foldable t, Monad m )

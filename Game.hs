@@ -4,6 +4,10 @@ module Game where
 -- import Data.List (sort)
 
 -- import Debug.Trace
+import GHC.Generics (Generic)
+import Data.Generics.Labels ()
+import Player
+import Control.Lens
 import Card
 import System.Random (StdGen)
 import qualified System.Random as Random
@@ -16,13 +20,12 @@ import qualified Data.Set as Set
 
 
 data Game = Game
-  { gameHand :: [Card]
-  , gameShip :: Int
+  { gamePlayer1 :: Player
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
   , gameRandom :: StdGen
-  } deriving stock (Show)
+  } deriving stock (Show, Generic)
 
 instance Show GameState where
   show = \case
@@ -63,11 +66,11 @@ gameShips :: Game -> Set Int
 gameShips = Set.fromList . gameShipsList
 
 gameShipsList :: Game -> [Int]
-gameShipsList game =
-  [ gameShip game
-  , gameDerelict1 game
-  , gameDerelict2 game
-  ]
+gameShipsList game = undefined
+  -- [ gameShip game
+  -- , gameDerelict1 game
+  -- , gameDerelict2 game
+  -- ]
 
 data GameState =
     RoundBegan (Int -> Maybe Game)
@@ -78,8 +81,7 @@ data GameState =
 initialGame :: StdGen -> Game
 initialGame random = setStateDraftBegan
   Game
-    { gameHand = []
-    , gameShip = 0
+    { gamePlayer1 = Player 0 []
     , gameDerelict1 = 10
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
@@ -91,7 +93,7 @@ setStateRoundBegan :: Game -> Game
 setStateRoundBegan game0 = game1
   where
     f :: Int -> Maybe Game
-    f x = if x >= length (gameHand game1)
+    f x = if x >= undefined--length (gameHand game1)
       then Nothing
       else Just $ handlePlayCard x game1
 
@@ -106,10 +108,10 @@ setStateDraftBegan game0 = game1
     game1 = game0 { gameState = DraftBegan game2 }
 
     game2 :: Game
-    game2 = setStateRoundBegan game1
-      { gameHand = draftHand
-      , gameRandom = ran2
-      }
+    game2 = game1
+      & #gamePlayer1 . #playerHand .~ draftHand
+      & #gameRandom .~ ran2
+      & setStateRoundBegan
 
     (ran1, ran2) = Random.split (gameRandom game1)
 
@@ -132,7 +134,7 @@ handlePlayCard :: Int -> Game -> Game
 handlePlayCard x game0 =
   let
     handSize :: Int
-    handSize = length (gameHand game0)
+    handSize = undefined--length (gameHand game0)
 
   in if x < 0 || x >= handSize then error "Invalid card index" else
     let (card :: Card, game1 :: Game) = pluck x game0
@@ -145,18 +147,18 @@ handlePlayCard x game0 =
 pluck :: Int -> Game -> (Card, Game)
 pluck index game =
   let
-    card = gameHand game !! index
-    game' = game { gameHand = delete card (gameHand game) }
+    card = undefined--gameHand game !! index
+    game' = undefined--game & #gameHand %~ delete card
+    --{ gameHand = delete card (gameHand game) }
   in (card, game')
 
 -- Play this Card and determine the resulting Game
 playCard :: Card -> Game -> Game
 playCard card game = case cardType card of
-  -- TODO This function is getting the wrong game (gameship not updated)
   Fuel ->
     let
       motion :: Int
-      motion = gameMotion game (gameShip game)
+      motion = undefined--gameMotion game (gameShip game)
 
       move :: Int
       move = motion * cardAmount card
@@ -170,20 +172,20 @@ playCard card game = case cardType card of
         else pos
 
       candidatePos :: Int
-      candidatePos = gameShip game + move
+      candidatePos = undefined --gameShip game + move
 
       newPosition :: Int
       newPosition = max 0 $ if motion == 0
         then candidatePos
         else openPos candidatePos
 
-    in game { gameShip = newPosition }
+    in undefined--game { gameShip = newPosition }
   -- Repulsor -> undefined
   -- Tractor -> undefined
 
 validateGame :: Game -> IO ()
 validateGame game@(Game { .. })  = do
-  when (length gameHand > 6) (die "Hand exceeded 6 cards")
+  --when (length gameHand > 6) (die "Hand exceeded 6 cards")
   when (any (<0) (gameShips game)) (die "Ship index cannot be negative")
   do
     let

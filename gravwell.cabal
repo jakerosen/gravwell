@@ -11,15 +11,20 @@ executable gravwell
     random,
     random-shuffle,
     pretty-simple,
+    lens,
+    generic-lens,
   default-extensions:
     BlockArguments
     DerivingStrategies
     LambdaCase
     TypeApplications
     ScopedTypeVariables
+    OverloadedLabels
+    DeriveGeneric
   default-language: Haskell2010
   ghc-options: -Wall
   main-is: Main.hs
   other-modules:
     Game
     Card
+    Player
