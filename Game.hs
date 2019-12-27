@@ -2,7 +2,7 @@ module Game where
 
 -- import Data.List (sort)
 
-import Debug.Trace
+-- import Debug.Trace
 import Card
 import Data.List
 import Data.Maybe
@@ -63,13 +63,7 @@ data GameState =
 initialGame :: Game
 initialGame = setStateDraftBegan
   Game
-    { gameHand = [ Card "A" 1 Fuel
-                 , Card "B" 2 Fuel
-                 , Card "C" 3 Fuel
-                 , Card "D" 4 Fuel
-                 , Card "E" 5 Fuel
-                 , Card "F" 6 Fuel
-                 ]
+    { gameHand = []
     , gameShip = 0
     , gameDerelict1 = 10
     , gameDerelict2 = 20
@@ -121,13 +115,12 @@ handlePlayCard x game0 =
   let
     handSize :: Int
     handSize = length (gameHand game0)
+
   in if x < 0 || x >= handSize then error "Invalid card index" else
-    let
-      (card :: Card, game1 :: Game) = pluck x game0
-      game2 = if handSize == 1
-        then playCard card (setStateRoundEnded game1)
-        else playCard card (setStateRoundBegan game1)
-    in game2
+    let (card :: Card, game1 :: Game) = pluck x game0
+    in if handSize == 1
+      then setStateRoundEnded $ playCard card game1
+      else setStateRoundBegan $ playCard card game1
 
 -- Pluck a card at this index out of the player's hand.
 -- This must be a valid index
@@ -141,6 +134,7 @@ pluck index game =
 -- Play this Card and determine the resulting Game
 playCard :: Card -> Game -> Game
 playCard card game = case cardType card of
+  -- TODO This function is getting the wrong game (gameship not updated)
   Fuel ->
     let
       motion :: Int
@@ -157,13 +151,14 @@ playCard card game = case cardType card of
         then openPos (pos + motion)
         else pos
 
-      -- TODO playCard seems to work incorrectly
+      candidatePos :: Int
+      candidatePos = gameShip game + move
+
       newPosition :: Int
       newPosition = max 0 $ if motion == 0
-        then gameShip game + move
-        else openPos (gameShip game + move)
+        then candidatePos
+        else openPos candidatePos
 
-      game' = game { gameShip = newPosition }
-    in trace (show motion) game'
+    in game { gameShip = newPosition }
   -- Repulsor -> undefined
   -- Tractor -> undefined
