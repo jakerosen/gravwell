@@ -33,13 +33,19 @@ gameMotion game index =
     EQ -> 0
     GT -> 1
   where
-    comp1 = compare closestShipAhead closestShipBehind
-    comp2 = compare numShipsBehind numShipsAhead
+    comp1 = compare closestShipBehind closestShipAhead
+    comp2 = compare numShipsAhead numShipsBehind
 
     (shipsBehind, shipsAhead) = Set.split index ships
 
-    closestShipBehind = fromMaybe minBound (Set.lookupMax shipsBehind)
-    closestShipAhead = fromMaybe maxBound (Set.lookupMin shipsAhead)
+    closestShipBehind = case (Set.lookupMax shipsBehind) of
+      Nothing -> maxBound
+      Just n -> index - n
+
+    closestShipAhead = case (Set.lookupMin shipsAhead) of
+      Nothing -> maxBound
+      Just n ->  n - index
+
     numShipsBehind = length shipsBehind
     numShipsAhead = length shipsAhead
 

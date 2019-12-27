@@ -52,5 +52,5 @@ displayGame = print
 
 -- displayOutput = print @()
 
-gameOver :: b -> Bool
-gameOver = const False
+gameOver :: Game -> Bool
+gameOver game = gameShip game >= 30
