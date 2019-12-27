@@ -5,8 +5,10 @@ version: 0
 
 executable gravwell
   build-depends:
-      base
-    , containers
+    ansi-terminal,
+    base,
+    containers,
+    pretty-simple,
   default-extensions:
     BlockArguments
     DerivingStrategies

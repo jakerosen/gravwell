@@ -1,18 +1,25 @@
 module Main where
 
 import Control.Category ((>>>))
--- import Data.Foldable (for_)
-import Data.Function (fix)
 import Data.Functor ((<&>))
+import Data.Maybe
+import System.Environment (lookupEnv)
+import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
+import System.IO.Unsafe (unsafePerformIO)
+import Text.Pretty.Simple (pPrint)
 import Text.Read (readMaybe)
+import qualified System.Console.ANSI as Ansi
 
 import Game
 
+debug :: Bool
+debug =
+  unsafePerformIO do
+    isJust <$> lookupEnv "debug"
 
 main :: IO ()
 main = do
-  putStrLn "Gravwell"
-
+  hSetBuffering stdout NoBuffering
   loop initialGame
 
 loop :: Game -> IO ()
@@ -29,9 +36,8 @@ loop' game = do
     RoundBegan next -> do
       putStrLn "Pick a card."
 
-      fix \again ->
-        ( getInt <&> next ) >>=
-          maybe again loop
+      untilJust ( getInt <&> next ) >>= loop
+
     DraftBegan next -> do
       putStrLn "Press enter to draft."
       _ <- getLine
@@ -41,6 +47,9 @@ loop' game = do
       _ <- getLine
       loop next
 
+untilJust :: IO ( Maybe a ) -> IO a
+untilJust action =
+  action >>= maybe ( untilJust action ) pure
 
 getInt :: IO Int
 getInt =
@@ -48,10 +57,25 @@ getInt =
     ( readMaybe >>> maybe getInt pure )
 
 displayGame :: Game -> IO ()
-displayGame = print
+displayGame game = do
+  Ansi.setCursorPosition 0 0
+  Ansi.clearFromCursorToScreenEnd
 
+  if debug then
+    pPrint game
+  else do
+    Ansi.setCursorPosition 1 ( gameShip game ) >> putStr ( blue ">" )
+    Ansi.setCursorPosition 1 ( gameDerelict1 game ) >> putStr ( red ">" )
+    Ansi.setCursorPosition 1 ( gameDerelict2 game ) >> putStr ( red ">" )
 
--- displayOutput = print @()
+    Ansi.setCursorPosition 3 0
+    putStrLn "Run with 'debug' environment var to see game state instead.\n"
+
+  where
+    blue = style ( fg Ansi.Blue )
+    red = style ( fg Ansi.Red )
+    fg c = Ansi.SetColor Ansi.Foreground Ansi.Vivid c
+    style c s = Ansi.setSGRCode [ c ] ++ s ++ Ansi.setSGRCode [ Ansi.Reset ]
 
 gameOver :: Game -> Bool
 gameOver game = gameShip game >= 30
