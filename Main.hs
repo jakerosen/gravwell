@@ -2,17 +2,18 @@
 
 module Main where
 
-import System.Random (StdGen, getStdGen)
 import Control.Category ((>>>))
+import Control.Lens ((^.))
 import Data.Foldable (foldlM)
 import Data.Functor ((<&>), void)
 import Data.Maybe
+import qualified System.Console.ANSI as Ansi
 import System.Environment (lookupEnv)
-import System.IO (BufferMode(NoBuffering), hSetBuffering, stdout)
+import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Random (StdGen, getStdGen)
 import Text.Pretty.Simple (pPrint)
 import Text.Read (readMaybe)
-import qualified System.Console.ANSI as Ansi
 
 import Card
 import Game
@@ -76,7 +77,7 @@ displayGame game@Game{..} = do
   if debug then
     pPrint game
   else do
-    -- drawShip 1 gameShip blue
+    drawShip 1 (game ^. #gamePlayer1 . #playerShip) blue
     drawShip 1 gameDerelict1 red
     drawShip 1 gameDerelict2 red
 
@@ -87,8 +88,7 @@ displayGame game@Game{..} = do
           pure ( n + m + 2 )
       )
       0
-      -- gameHand
-      (undefined :: [Card])
+      (game ^. #gamePlayer1 . #playerHand)
 
     Ansi.setCursorPosition 5 0
     putStrLn "Run with 'debug' environment var to see game state instead.\n"
@@ -116,9 +116,6 @@ fg c = Ansi.SetColor Ansi.Foreground Ansi.Vivid c
 
 style :: Ansi.SGR -> [ Char ] -> [ Char ]
 style c s = Ansi.setSGRCode [ c ] ++ s ++ Ansi.setSGRCode [ Ansi.Reset ]
-
-gameOver :: Game -> Bool
-gameOver game = undefined --gameShip game >= 30
 
 foldlM_
   :: ( Foldable t, Monad m )

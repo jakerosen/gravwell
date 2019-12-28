@@ -21,6 +21,7 @@ import qualified Data.Set as Set
 
 data Game = Game
   { gamePlayer1 :: Player
+  , gamePlayer2 :: Player
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
@@ -36,7 +37,7 @@ instance Show GameState where
 -- | Returns 1 (forwards), -1 (backwards), or 0 (nowhere) per the natural motion
 -- direction of the given index in the game.
 gameMotion :: Game -> Int -> Int
-gameMotion game index =
+gameMotion game i =
   case comp1 <> comp2 of
     LT -> -1
     EQ -> 0
@@ -45,15 +46,15 @@ gameMotion game index =
     comp1 = compare closestShipBehind closestShipAhead
     comp2 = compare numShipsAhead numShipsBehind
 
-    (shipsBehind, shipsAhead) = Set.split index ships
+    (shipsBehind, shipsAhead) = Set.split i ships
 
     closestShipBehind = case (Set.lookupMax shipsBehind) of
       Nothing -> maxBound
-      Just n -> index - n
+      Just n -> i - n
 
     closestShipAhead = case (Set.lookupMin shipsAhead) of
       Nothing -> maxBound
-      Just n ->  n - index
+      Just n ->  n - i
 
     numShipsBehind = length shipsBehind
     numShipsAhead = length shipsAhead
@@ -61,16 +62,27 @@ gameMotion game index =
     ships :: Set Int
     ships = gameShips game
 
+gamePlayers :: Game -> [Player]
+gamePlayers game =
+  [ gamePlayer1 game
+  , gamePlayer2 game
+  ]
+
+gameOver :: Game -> Bool
+gameOver game = any (>= gameWarpGate) (gameShipsList game)
+
+gameWarpGate :: Int
+gameWarpGate = 30
+
 -- | Positions of all ships in the game
 gameShips :: Game -> Set Int
 gameShips = Set.fromList . gameShipsList
 
 gameShipsList :: Game -> [Int]
-gameShipsList game = undefined
-  -- [ gameShip game
-  -- , gameDerelict1 game
-  -- , gameDerelict2 game
-  -- ]
+gameShipsList game =
+  [ gameDerelict1 game
+  , gameDerelict2 game
+  ] ++ map (view #playerShip) (gamePlayers game)
 
 data GameState =
     RoundBegan (Int -> Maybe Game)
@@ -82,6 +94,7 @@ initialGame :: StdGen -> Game
 initialGame random = setStateDraftBegan
   Game
     { gamePlayer1 = Player 0 []
+    , gamePlayer2 = Player 0 []
     , gameDerelict1 = 10
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
@@ -93,7 +106,7 @@ setStateRoundBegan :: Game -> Game
 setStateRoundBegan game0 = game1
   where
     f :: Int -> Maybe Game
-    f x = if x >= undefined--length (gameHand game1)
+    f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
       then Nothing
       else Just $ handlePlayCard x game1
 
@@ -109,14 +122,24 @@ setStateDraftBegan game0 = game1
 
     game2 :: Game
     game2 = game1
-      & #gamePlayer1 . #playerHand .~ draftHand
+      & #gamePlayer1 . #playerHand .~ draftHand1
+      & #gamePlayer2 . #playerHand .~ draftHand2
       & #gameRandom .~ ran2
       & setStateRoundBegan
 
     (ran1, ran2) = Random.split (gameRandom game1)
 
-    draftHand :: [Card]
-    draftHand = take 6 $ shuffle' deck 26 ran1
+    -- draftHand :: [Card]
+    -- draftHand = take 6 deck'
+
+    deck' :: [Card]
+    deck' = shuffle' deck 26 ran1
+
+    (draftHand1, (draftHand2, _))
+      =             (splitAt 6 deck')
+      & _2 %~       (splitAt 6)
+      & _2._2 %~    (splitAt 6)
+      & _2._2._2 %~ (splitAt 6)
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game
@@ -134,7 +157,7 @@ handlePlayCard :: Int -> Game -> Game
 handlePlayCard x game0 =
   let
     handSize :: Int
-    handSize = undefined--length (gameHand game0)
+    handSize = length (game0 ^. #gamePlayer1 . #playerHand)
 
   in if x < 0 || x >= handSize then error "Invalid card index" else
     let (card :: Card, game1 :: Game) = pluck x game0
@@ -145,11 +168,10 @@ handlePlayCard x game0 =
 -- Pluck a card at this index out of the player's hand.
 -- This must be a valid index
 pluck :: Int -> Game -> (Card, Game)
-pluck index game =
+pluck i game =
   let
-    card = undefined--gameHand game !! index
-    game' = undefined--game & #gameHand %~ delete card
-    --{ gameHand = delete card (gameHand game) }
+    card = game ^?! #gamePlayer1 . #playerHand . ix i
+    game' = game & #gamePlayer1 . #playerHand %~ delete card
   in (card, game')
 
 -- Play this Card and determine the resulting Game
@@ -158,7 +180,7 @@ playCard card game = case cardType card of
   Fuel ->
     let
       motion :: Int
-      motion = undefined--gameMotion game (gameShip game)
+      motion = gameMotion game (game ^. #gamePlayer1 . #playerShip)
 
       move :: Int
       move = motion * cardAmount card
@@ -172,21 +194,30 @@ playCard card game = case cardType card of
         else pos
 
       candidatePos :: Int
-      candidatePos = undefined --gameShip game + move
+      candidatePos = game ^. #gamePlayer1 . #playerShip + move
 
       newPosition :: Int
       newPosition = max 0 $ if motion == 0
         then candidatePos
         else openPos candidatePos
 
-    in undefined--game { gameShip = newPosition }
+    in game & #gamePlayer1 . #playerShip .~ newPosition
   -- Repulsor -> undefined
   -- Tractor -> undefined
 
 validateGame :: Game -> IO ()
 validateGame game@(Game { .. })  = do
-  --when (length gameHand > 6) (die "Hand exceeded 6 cards")
+  when
+    -- ((gamePlayers game) & undefined)
+    (any (\player -> length (playerHand player) > 6) (gamePlayers game))
+    (die "Hand exceeded 6 cards")
+
   when (any (<0) (gameShips game)) (die "Ship index cannot be negative")
+
+  when
+    (length (filter (>=gameWarpGate) (gameShipsList game)) > 1)
+    (die "Two ships cannot be in the warp gate at once")
+
   do
     let
       xs :: [Int]
