@@ -1,13 +1,26 @@
 module Card where
 
+import Control.Monad.State.Lazy (State)
+import qualified Control.Monad.State.Lazy as State
+import GHC.Generics (Generic)
+
 data Card = Card
   { cardSymbol :: String
   , cardAmount :: Int
   , cardType   :: CardType
-  } deriving stock ( Show, Eq )
+  } deriving stock ( Show, Eq, Generic )
 
-data CardType = Fuel -- | Repulsor | Tractor
+data CardType = Fuel | Repulsor | Tractor
   deriving stock ( Show, Eq )
+
+pluckCard :: Int -> [Card] -> (Card, [Card])
+pluckCard = undefined
+
+pluckCard' :: Int -> State [Card] Card
+pluckCard' n = State.state (pluckCard n)
+
+-- foobar :: Lens' Player [Card] -> State [Card] a -> State Player a
+-- foobar = undefined
 
 deck :: [Card]
 deck =

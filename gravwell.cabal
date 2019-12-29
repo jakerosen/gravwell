@@ -13,6 +13,8 @@ executable gravwell
     pretty-simple,
     lens,
     generic-lens,
+    MonadRandom,
+    mtl,
   default-extensions:
     BlockArguments
     DerivingStrategies
@@ -21,6 +23,8 @@ executable gravwell
     ScopedTypeVariables
     OverloadedLabels
     DeriveGeneric
+    RankNTypes
+    ViewPatterns
   default-language: Haskell2010
   ghc-options: -Wall
   main-is: Main.hs

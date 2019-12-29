@@ -77,9 +77,10 @@ displayGame game@Game{..} = do
   if debug then
     pPrint game
   else do
+    drawShip 1 (game ^. #gamePlayer2 . #playerShip) red
     drawShip 1 (game ^. #gamePlayer1 . #playerShip) blue
-    drawShip 1 gameDerelict1 red
-    drawShip 1 gameDerelict2 red
+    drawShip 1 gameDerelict1 black
+    drawShip 1 gameDerelict2 black
 
     foldlM_
       ( \n card -> do
@@ -110,6 +111,7 @@ blue, green, red :: [ Char ] -> [ Char ]
 blue = style ( fg Ansi.Blue )
 green = style ( fg Ansi.Green )
 red = style ( fg Ansi.Red )
+black = style ( fg Ansi.Black )
 
 fg :: Ansi.Color -> Ansi.SGR
 fg c = Ansi.SetColor Ansi.Foreground Ansi.Vivid c
