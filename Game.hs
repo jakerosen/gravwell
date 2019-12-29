@@ -5,7 +5,7 @@ module Game where
 
 -- import Debug.Trace
 import Data.Traversable
-import Data.Foldable (for_)
+import Data.Foldable (for_, traverse_)
 import Control.Monad.State.Lazy (State, runState)
 import qualified Control.Monad.State.Lazy as State
 import Control.Monad.Random
@@ -215,19 +215,19 @@ handlePlayCard x game0 =
       -- i <- getRandomR (0, range)
       -- pure $ pluckPlayer i player
 
-    aiPicks :: State Game [(ALens' Game Player, Card)]
-    aiPicks = for [#gamePlayer2] \player -> do
-      card <- aiPickCard' (cloneLens player)
-      pure (player, card)
+    aiPicks :: State Game [(ALens' Game Int, Card)]
+    aiPicks = for [#gamePlayer2] \(cloneLens -> player) -> do
+      card <- aiPickCard' player
+      pure (player . #playerShip, card)
 
     pick :: State Game Card
     pick = zoom (#gamePlayer1 . #playerHand) (pluckCard' x)
 
-    picks :: State Game [(ALens' Game Player, Card)]
+    picks :: State Game [(ALens' Game Int, Card)]
     picks = do
       card <- pick
       ais <- aiPicks
-      pure $ (#gamePlayer1, card):ais
+      pure $ orderPicks ((#gamePlayer1 . #playerShip, card):ais)
 
     orderPicks :: [(a, Card)] -> [(a, Card)]
     orderPicks = sortBy
@@ -235,6 +235,7 @@ handlePlayCard x game0 =
         (p1 ^. _2 . #cardSymbol)
         (p2 ^. _2 . #cardSymbol))
 
+    -------
     plucksAI :: [(Card, Player)]
     (plucksAI, newRan) = runRand (mapM aiPickCard ps) (game0 ^. #gameRandom)
 
@@ -329,8 +330,25 @@ handlePlayCard x game0 =
     -- game1 :: Game
     -- (_, (game1, _)) = runState (mapM playCard orderedCards) (game0, players)
 
+    -- m :: State Game
+    -- a :: [stuff]
+    -- m a :: State Game [stuff]
+    -- b :: ()
+    -- State Game [stuff] -> State Game ()
+    -- f :: [stuff] -> State Game ()
+    -- for_ [stuff] -> (stuff -> State Game ()) -> State Game ()
+    -- (>>=) :: m a -> (a -> m b) -> m b
+    -- (>>=)
+    --  :: State Game [stuff]
+    --  -> ([stuff] -> State Game ())
+    --  -> State Game ()
+
+    bar :: State Game ()
+    bar = picks >>= traverse_
+      \((cloneLens -> player), card) -> playCard2 card player []
+
     game1 :: Game
-    game1 = undefined
+    game1 = snd $ runState bar game0
 
     game2 :: Game
     game2 = game1 & #gameRandom .~ newRan

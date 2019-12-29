@@ -1,5 +1,6 @@
 module Card where
 
+import Data.List (delete)
 import Control.Monad.State.Lazy (State)
 import qualified Control.Monad.State.Lazy as State
 import GHC.Generics (Generic)
@@ -14,13 +15,14 @@ data CardType = Fuel | Repulsor | Tractor
   deriving stock ( Show, Eq )
 
 pluckCard :: Int -> [Card] -> (Card, [Card])
-pluckCard = undefined
+pluckCard i cards =
+  let
+    card = cards !! i
+    cards' = delete card cards
+  in (card, cards')
 
 pluckCard' :: Int -> State [Card] Card
 pluckCard' n = State.state (pluckCard n)
-
--- foobar :: Lens' Player [Card] -> State [Card] a -> State Player a
--- foobar = undefined
 
 deck :: [Card]
 deck =
