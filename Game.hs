@@ -5,6 +5,8 @@ module Game where
 
 -- import Debug.Trace
 import Data.Traversable
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 import Data.Foldable (for_, traverse_)
 import Control.Monad.State.Lazy (State, runState)
 import qualified Control.Monad.State.Lazy as State
@@ -76,6 +78,24 @@ gamePlayers game =
   [ gamePlayer1 game
   , gamePlayer2 game
   ]
+
+gamePlayerNum :: Map Int (ALens' Game Player)
+gamePlayerNum = Map.fromList
+  [ (1, #gamePlayer1)
+  , (2, #gamePlayer2)
+  ]
+
+gameOtherShips :: Map Int ([ALens' Game Int])
+gameOtherShips = Map.fromList
+  [ (1, [#gamePlayer2 . #playerShip, #gameDerelict1, #gameDerelict2])
+  , (2, [#gamePlayer1 . #playerShip, #gameDerelict1, #gameDerelict2])
+  ]
+
+
+-- temp = [(#gamePlayer2,
+--         [ #gameDerelict1
+--         , #gameDerelict2
+--         , #gamePlayer1 . #playerShip])]
 
 setPlayers :: [Player] -> Game -> Game
 setPlayers players game0 =
@@ -177,15 +197,6 @@ handlePlayCard x game0 =
     handSize :: Int
     handSize = length (game0 ^. #gamePlayer1 . #playerHand)
 
-    p1 :: Player
-    p1 = gamePlayer1 game0
-
-    pluck1 :: (Card, Player)
-    pluck1 = pluckPlayer x p1
-
-    ps :: [Player]
-    ps = tail $ gamePlayers game0
-
     -- m :: Rand StdGen (Card, Player)
     -- t :: []
     -- b :: ((Card, Player), StdGen)
@@ -211,101 +222,51 @@ handlePlayCard x game0 =
         ((card, player'), ran') = runRand rand ran
       State.put (game & player .~ player' & #gameRandom .~ ran')
       pure card
-      -- let range = length (player ^. #playerHand) - 1
-      -- i <- getRandomR (0, range)
-      -- pure $ pluckPlayer i player
 
-    aiPicks :: State Game [(ALens' Game Int, Card)]
-    aiPicks = for [#gamePlayer2] \(cloneLens -> player) -> do
-      card <- aiPickCard' player
-      pure (player . #playerShip, card)
+    aiPicks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
+    aiPicks =
+      for [2] \playerNum -> do
+        let
+          player :: Lens' Game Player
+          player = cloneLens $ gamePlayerNum Map.! playerNum
+
+          ship :: Lens' Game Int
+          ship = player . #playerShip
+
+          otherShips :: [ALens' Game Int]
+          otherShips = gameOtherShips Map.! playerNum
+
+        card <- aiPickCard' player
+        pure (ship, otherShips, card)
 
     pick :: State Game Card
     pick = zoom (#gamePlayer1 . #playerHand) (pluckCard' x)
 
-    picks :: State Game [(ALens' Game Int, Card)]
+    picks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
     picks = do
       card <- pick
       ais <- aiPicks
-      pure $ orderPicks ((#gamePlayer1 . #playerShip, card):ais)
+      let
+        p1 :: Lens' Game Int
+        p1 = #gamePlayer1 . #playerShip
 
-    orderPicks :: [(a, Card)] -> [(a, Card)]
+        otherShips :: [ALens' Game Int]
+        otherShips = gameOtherShips Map.! 1
+
+      pure $ orderPicks ((p1, otherShips, card):ais)
+
+    orderPicks :: [(a, b, Card)] -> [(a, b, Card)]
     orderPicks = sortBy
       (\p1 p2 -> compare
-        (p1 ^. _2 . #cardSymbol)
-        (p2 ^. _2 . #cardSymbol))
+        (p1 ^. _3 . #cardSymbol)
+        (p2 ^. _3 . #cardSymbol))
 
-    -------
-    plucksAI :: [(Card, Player)]
-    (plucksAI, newRan) = runRand (mapM aiPickCard ps) (game0 ^. #gameRandom)
-
-    (cardsToPlay, players) = unzip (pluck1:plucksAI)
-
-    -- game' = setPlayers players game0
-
-    -- card to play with index of player to play
-    orderedCards :: [(Card, Int)]
-    orderedCards =
-      sortBy
-        (\p1 p2 -> compare
-          (p1 ^. _1 . #cardSymbol)
-          (p2 ^. _1 . #cardSymbol))
-        (zip cardsToPlay [0..])
-        -- (zipWith (\(c, p) i -> ((c, i), p)) (pluck1:plucksAI) [1..])
-
-    -- m :: State Game
-    -- b :: () (?)
-    -- t :: []
-    -- a :: (Card, Int)
-    -- a -> m b
-    -- mapM_
-    --  :: (Card, Int) -> State Game ()
-    --  -> [(Card, Int)]
-    --  -> State Game ()
-
-    playCard :: (Card, Int) -> State (Game, [Player]) ()
-    playCard (card, playerIndex) = do
-      (game0, players) <- State.get
-      let
-        occupiedSpaces = gameShips game0
-        moveAmount = cardAmount card
-      case cardType card of
-        Tractor -> undefined
-        _ ->
-          let
-            currentPlayer = players !! playerIndex
-            (beforePlayers, afterPlayers) =
-              (splitAt playerIndex players) & _2 %~ tail
-
-            newPlayers = case cardType card of
-              Fuel ->
-                let
-                  newCurrentPlayer = currentPlayer & #playerShip
-                    .~ moveShip
-                      occupiedSpaces
-                      (gameMotion game0)
-                      moveAmount
-                      (playerShip currentPlayer)
-                in beforePlayers ++ newCurrentPlayer : afterPlayers
-              Repulsor ->
-                let
-                  newCurrentPlayer = currentPlayer & #playerShip
-                    .~ moveShip
-                      occupiedSpaces
-                      ((*(-1)) . gameMotion game0)
-                      moveAmount
-                      (playerShip currentPlayer)
-                in beforePlayers ++ newCurrentPlayer : afterPlayers
-              Tractor -> undefined
-            game1 = setPlayers newPlayers game0
-          in State.put (game1, newPlayers)
-
-    playCard2
+    playCard
       :: Card
       -> Lens' Game Int
       -> [ALens' Game Int]
       -> State Game ()
-    playCard2 card ship otherShips = do
+    playCard card ship otherShips = do
       let
         moveAmount = cardAmount card
       case cardType card of
@@ -327,9 +288,6 @@ handlePlayCard x game0 =
 
             in State.modify (moveShip' moveAmount f otherShip)
 
-    -- game1 :: Game
-    -- (_, (game1, _)) = runState (mapM playCard orderedCards) (game0, players)
-
     -- m :: State Game
     -- a :: [stuff]
     -- m a :: State Game [stuff]
@@ -343,20 +301,17 @@ handlePlayCard x game0 =
     --  -> ([stuff] -> State Game ())
     --  -> State Game ()
 
-    bar :: State Game ()
-    bar = picks >>= traverse_
-      \((cloneLens -> player), card) -> playCard2 card player []
+    gameS :: State Game ()
+    gameS = picks >>= traverse_ \((cloneLens -> player), otherShips, card)
+      -> playCard card player otherShips
 
     game1 :: Game
-    game1 = snd $ runState bar game0
-
-    game2 :: Game
-    game2 = game1 & #gameRandom .~ newRan
+    game1 = snd $ runState gameS game0
 
   in if x < 0 || x >= handSize then error "Invalid card index" else
     if handSize == 1
-      then setStateRoundEnded game2
-      else setStateRoundBegan game2
+      then setStateRoundEnded game1
+      else setStateRoundBegan game1
 
 -- Pluck a card at this index out of the player's hand.
 -- This must be a valid index
@@ -403,13 +358,11 @@ moveShip ships f fuel pos =
         else openPos candidatePos
 
     in newPosition
-  -- Repulsor -> undefined
-  -- Tractor -> undefined
 
 moveShip'
   :: Int -- fuel amount
   -> (Int -> Int) -- motion
-  -> Lens' Game Int
+  -> Lens' Game Int -- The ship that is moving
   -> Game -- starting pos
   -> Game
 moveShip' fuel f ship game =
