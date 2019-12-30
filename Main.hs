@@ -6,17 +6,18 @@ import Control.Category ((>>>))
 import Control.Lens ((^.))
 import Data.Foldable (foldlM)
 import Data.Functor ((<&>), void)
+import Data.List (intercalate)
 import Data.Maybe
 import qualified System.Console.ANSI as Ansi
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Random (StdGen, getStdGen)
-import Text.Pretty.Simple (pPrint)
 import Text.Read (readMaybe)
 
 import Card
 import Game
+import Player
 
 debug :: Bool
 debug =
@@ -74,39 +75,63 @@ displayGame game@Game{..} = do
   Ansi.setCursorPosition 0 0
   Ansi.clearFromCursorToScreenEnd
 
-  if debug then
-    pPrint game
+  drawShip 1 (game ^. #gamePlayer2 . #playerShip) red
+  drawShip 1 (game ^. #gamePlayer3 . #playerShip) red
+  drawShip 1 (game ^. #gamePlayer4 . #playerShip) red
+  drawShip 1 (game ^. #gamePlayer1 . #playerShip) blue
+  drawShip 1 gameDerelict1 black
+  drawShip 1 gameDerelict2 black
+
+  foldlM_
+    ( \n card -> do
+        m <- displayCard ( 3, n ) card
+        putStr ", "
+        pure ( n + m + 2 )
+    )
+    0
+    (game ^. #gamePlayer1 . #playerHand)
+
+  Ansi.setCursorPosition 5 0
+
+  if debug then do
+    let ppCard = snd . prettyCard
+    let ppDerelict n derelict = "Derelict " ++ n ++ ": Ship = " ++ show derelict
+    let ppHand = intercalate ", " . map ppCard
+    let ppPlayer n player =
+          unwords
+            [ "Player " ++ n ++ ":"
+            , "Ship = " ++ show ( playerShip player ) ++ ","
+            , "Hand = " ++ ppHand ( playerHand player )
+            ]
+    let ppState s = "State: " ++ show s
+    putStrLn ( ppPlayer "1" gamePlayer1 )
+    putStrLn ( ppPlayer "2" gamePlayer2 )
+    putStrLn ( ppDerelict "1" gameDerelict1 )
+    putStrLn ( ppDerelict "2" gameDerelict2 )
+    putStrLn ( ppState gameState )
+    putStrLn ""
   else do
-    drawShip 1 (game ^. #gamePlayer2 . #playerShip) red
-    drawShip 1 (game ^. #gamePlayer3 . #playerShip) red
-    drawShip 1 (game ^. #gamePlayer4 . #playerShip) red
-    drawShip 1 (game ^. #gamePlayer1 . #playerShip) blue
-    drawShip 1 gameDerelict1 black
-    drawShip 1 gameDerelict2 black
-
-    foldlM_
-      ( \n card -> do
-          m <- displayCard ( 3, n ) card
-          putStr ", "
-          pure ( n + m + 2 )
-      )
-      0
-      (game ^. #gamePlayer1 . #playerHand)
-
-    Ansi.setCursorPosition 5 0
-    putStrLn "Run with 'debug' environment var to see game state instead.\n"
+    putStrLn "Run with 'debug' environment var to see debug game state.\n"
 
 -- | Display a card at the given (row, col) and return how many characters wide
 -- it is.
 displayCard :: ( Int, Int ) -> Card -> IO Int
-displayCard ( row, col ) Card{..} = do
+displayCard ( row, col ) card = do
   Ansi.setCursorPosition row col
-  case cardType of
-    Fuel -> putStr ( green s )
-    Repulsor -> putStr ( magenta s )
-    Tractor -> putStr ( cyan s )
-  pure ( length s )
+  case prettyCard card of
+    ( uncolored, colored ) -> do
+      putStr colored
+      pure ( length uncolored )
 
+-- | Returns (uncolored, colored)
+prettyCard :: Card -> ( [ Char ], [ Char ] )
+prettyCard Card{..} =
+  ( s
+  , case cardType of
+      Fuel -> green s
+      Repulsor -> magenta s
+      Tractor -> cyan s
+  )
   where
     s :: [ Char ]
     s = show cardAmount ++ " " ++ cardSymbol
