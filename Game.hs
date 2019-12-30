@@ -31,6 +31,7 @@ data Game = Game
   { gamePlayer1 :: Player
   , gamePlayer2 :: Player
   , gamePlayer3 :: Player
+  , gamePlayer4 :: Player
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
@@ -45,7 +46,7 @@ instance Show GameState where
 
 -- The current number of players supported
 numPlayers :: Int
-numPlayers = 2
+numPlayers = 4
 
 -- | Returns 1 (forwards), -1 (backwards), or 0 (nowhere) per the natural motion
 -- direction of the given index in the game.
@@ -80,6 +81,7 @@ gamePlayers game =
   [ gamePlayer1 game
   , gamePlayer2 game
   , gamePlayer3 game
+  , gamePlayer4 game
   ]
 
 gamePlayerByNum :: Map Int (ALens' Game Player)
@@ -87,18 +89,26 @@ gamePlayerByNum = Map.fromList
   [ (1, #gamePlayer1)
   , (2, #gamePlayer2)
   , (3, #gamePlayer3)
+  , (4, #gamePlayer4)
   ]
 
 gameOtherShips :: Map Int ([ALens' Game Int])
 gameOtherShips = Map.fromList
   [ (1, [ #gamePlayer2 . #playerShip
         , #gamePlayer3 . #playerShip
+        , #gamePlayer4 . #playerShip
         , #gameDerelict1, #gameDerelict2])
   , (2, [ #gamePlayer1 . #playerShip
         , #gamePlayer3 . #playerShip
+        , #gamePlayer4 . #playerShip
         , #gameDerelict1, #gameDerelict2])
   , (3, [ #gamePlayer1 . #playerShip
         , #gamePlayer2 . #playerShip
+        , #gamePlayer4 . #playerShip
+        , #gameDerelict1, #gameDerelict2])
+  , (4, [ #gamePlayer1 . #playerShip
+        , #gamePlayer2 . #playerShip
+        , #gamePlayer3 . #playerShip
         , #gameDerelict1, #gameDerelict2])
   ]
 
@@ -130,6 +140,7 @@ initialGame ran = setStateDraftBegan
     { gamePlayer1 = Player 0 []
     , gamePlayer2 = Player 0 []
     , gamePlayer3 = Player 0 []
+    , gamePlayer4 = Player 0 []
     , gameDerelict1 = 10
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
@@ -160,6 +171,7 @@ setStateDraftBegan game0 = game1
       & #gamePlayer1 . #playerHand .~ draftHand1
       & #gamePlayer2 . #playerHand .~ draftHand2
       & #gamePlayer3 . #playerHand .~ draftHand3
+      & #gamePlayer4 . #playerHand .~ draftHand4
       & #gameRandom .~ ran2
       & setStateRoundBegan
 
@@ -168,7 +180,7 @@ setStateDraftBegan game0 = game1
     deck' :: [Card]
     deck' = shuffle' deck 26 ran1
 
-    (draftHand1, (draftHand2, (draftHand3, _)))
+    (draftHand1, (draftHand2, (draftHand3, (draftHand4, _))))
       =             (splitAt 6 deck') -- hand 1
       & _2 %~       (splitAt 6) -- hand 2
       & _2._2 %~    (splitAt 6) -- hand 3
@@ -220,7 +232,7 @@ handlePlayCard x game0 =
 
     aiPicks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
     aiPicks =
-      for [2, 3] \playerNum -> do
+      for [2, 3, 4] \playerNum -> do
         let
           player :: Lens' Game Player
           player = cloneLens $ gamePlayerByNum Map.! playerNum
