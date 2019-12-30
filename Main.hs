@@ -78,6 +78,7 @@ displayGame game@Game{..} = do
     pPrint game
   else do
     drawShip 1 (game ^. #gamePlayer2 . #playerShip) red
+    drawShip 1 (game ^. #gamePlayer3 . #playerShip) red
     drawShip 1 (game ^. #gamePlayer1 . #playerShip) blue
     drawShip 1 gameDerelict1 black
     drawShip 1 gameDerelict2 black
@@ -101,13 +102,15 @@ displayCard ( row, col ) Card{..} = do
   Ansi.setCursorPosition row col
   case cardType of
     Fuel -> putStr ( green s )
+    Repulsor -> undefined
+    Tractor -> undefined
   pure ( length s )
 
   where
     s :: [ Char ]
     s = show cardAmount ++ " " ++ cardSymbol
 
-blue, green, red :: [ Char ] -> [ Char ]
+blue, green, red, black :: [ Char ] -> [ Char ]
 blue = style ( fg Ansi.Blue )
 green = style ( fg Ansi.Green )
 red = style ( fg Ansi.Red )

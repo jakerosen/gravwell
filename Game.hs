@@ -4,31 +4,33 @@ module Game where
 -- import Data.List (sort)
 
 -- import Debug.Trace
-import Data.Traversable
-import Data.Map.Lazy (Map)
-import qualified Data.Map.Lazy as Map
-import Data.Foldable (for_, traverse_)
+
+import Card
+import Control.Lens
+import Control.Monad.Random
 import Control.Monad.State.Lazy (State, runState)
 import qualified Control.Monad.State.Lazy as State
-import Control.Monad.Random
-import GHC.Generics (Generic)
+import Data.Foldable (for_, traverse_)
 import Data.Generics.Labels ()
-import Player
-import Control.Lens
-import Card
-import System.Random (StdGen)
-import qualified System.Random as Random
-import System.Random.Shuffle (shuffle')
-import Control.Monad
+-- import Control.Monad
 import Data.List
+import Data.Map.Lazy (Map)
+import qualified Data.Map.Lazy as Map
 -- import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Traversable
+import GHC.Generics (Generic)
+import Player
+import System.Random (StdGen)
+import qualified System.Random as Random
+import System.Random.Shuffle (shuffle')
 
 
 data Game = Game
   { gamePlayer1 :: Player
   , gamePlayer2 :: Player
+  , gamePlayer3 :: Player
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
@@ -77,34 +79,28 @@ gamePlayers :: Game -> [Player]
 gamePlayers game =
   [ gamePlayer1 game
   , gamePlayer2 game
+  , gamePlayer3 game
   ]
 
-gamePlayerNum :: Map Int (ALens' Game Player)
-gamePlayerNum = Map.fromList
+gamePlayerByNum :: Map Int (ALens' Game Player)
+gamePlayerByNum = Map.fromList
   [ (1, #gamePlayer1)
   , (2, #gamePlayer2)
+  , (3, #gamePlayer3)
   ]
 
 gameOtherShips :: Map Int ([ALens' Game Int])
 gameOtherShips = Map.fromList
-  [ (1, [#gamePlayer2 . #playerShip, #gameDerelict1, #gameDerelict2])
-  , (2, [#gamePlayer1 . #playerShip, #gameDerelict1, #gameDerelict2])
+  [ (1, [ #gamePlayer2 . #playerShip
+        , #gamePlayer3 . #playerShip
+        , #gameDerelict1, #gameDerelict2])
+  , (2, [ #gamePlayer1 . #playerShip
+        , #gamePlayer3 . #playerShip
+        , #gameDerelict1, #gameDerelict2])
+  , (3, [ #gamePlayer1 . #playerShip
+        , #gamePlayer2 . #playerShip
+        , #gameDerelict1, #gameDerelict2])
   ]
-
-
--- temp = [(#gamePlayer2,
---         [ #gameDerelict1
---         , #gameDerelict2
---         , #gamePlayer1 . #playerShip])]
-
-setPlayers :: [Player] -> Game -> Game
-setPlayers players game0 =
-  let
-    player1 = players !! 0
-    player2 = players !! 1
-  in game0
-    & #gamePlayer1 .~ player1
-    & #gamePlayer2 .~ player2
 
 gameOver :: Game -> Bool
 gameOver game = any (>= gameWarpGate) (gameShipsList game)
@@ -129,14 +125,15 @@ data GameState =
 
 -- The initial game state
 initialGame :: StdGen -> Game
-initialGame random = setStateDraftBegan
+initialGame ran = setStateDraftBegan
   Game
     { gamePlayer1 = Player 0 []
     , gamePlayer2 = Player 0 []
+    , gamePlayer3 = Player 0 []
     , gameDerelict1 = 10
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
-    , gameRandom = random
+    , gameRandom = ran
     }
 
 -- Sets the game state of this Game to RoundBegan
@@ -162,22 +159,20 @@ setStateDraftBegan game0 = game1
     game2 = game1
       & #gamePlayer1 . #playerHand .~ draftHand1
       & #gamePlayer2 . #playerHand .~ draftHand2
+      & #gamePlayer3 . #playerHand .~ draftHand3
       & #gameRandom .~ ran2
       & setStateRoundBegan
 
     (ran1, ran2) = Random.split (gameRandom game1)
 
-    -- draftHand :: [Card]
-    -- draftHand = take 6 deck'
-
     deck' :: [Card]
     deck' = shuffle' deck 26 ran1
 
-    (draftHand1, (draftHand2, _))
-      =             (splitAt 6 deck')
-      & _2 %~       (splitAt 6)
-      & _2._2 %~    (splitAt 6)
-      & _2._2._2 %~ (splitAt 6)
+    (draftHand1, (draftHand2, (draftHand3, _)))
+      =             (splitAt 6 deck') -- hand 1
+      & _2 %~       (splitAt 6) -- hand 2
+      & _2._2 %~    (splitAt 6) -- hand 3
+      & _2._2._2 %~ (splitAt 6) -- hand 4
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game
@@ -225,10 +220,10 @@ handlePlayCard x game0 =
 
     aiPicks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
     aiPicks =
-      for [2] \playerNum -> do
+      for [2, 3] \playerNum -> do
         let
           player :: Lens' Game Player
-          player = cloneLens $ gamePlayerNum Map.! playerNum
+          player = cloneLens $ gamePlayerByNum Map.! playerNum
 
           ship :: Lens' Game Int
           ship = player . #playerShip
@@ -313,22 +308,6 @@ handlePlayCard x game0 =
       then setStateRoundEnded game1
       else setStateRoundBegan game1
 
--- Pluck a card at this index out of the player's hand.
--- This must be a valid index
-pluck :: Int -> Game -> (Card, Game)
-pluck i game =
-  let
-    card = game ^?! #gamePlayer1 . #playerHand . ix i
-    game' = game & #gamePlayer1 . #playerHand %~ delete card
-  in (card, game')
-
-pluckPlayer :: Int -> Player -> (Card, Player)
-pluckPlayer i player =
-  let
-    card = player ^?! #playerHand . ix i
-    player' = player & #playerHand %~ delete card
-  in (card, player')
-
 -- Play this Card and determine the resulting Game
 moveShip
   :: Set Int -- occupied spaces
@@ -336,10 +315,10 @@ moveShip
   -> Int -- fuel amount
   -> Int -- starting pos
   -> Int
-moveShip ships f fuel pos =
+moveShip ships f fuel start =
     let
       motion :: Int
-      motion =  f pos
+      motion =  f start
 
       move :: Int
       move = motion * fuel
@@ -350,7 +329,7 @@ moveShip ships f fuel pos =
         else pos
 
       candidatePos :: Int
-      candidatePos = pos + move
+      candidatePos = start + move
 
       newPosition :: Int
       newPosition = max 0 $ if motion == 0
