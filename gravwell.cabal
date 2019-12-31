@@ -14,6 +14,7 @@ executable gravwell
     generic-lens,
     MonadRandom,
     mtl,
+    fused-effects,
   default-extensions:
     BlockArguments
     DerivingStrategies
@@ -24,6 +25,12 @@ executable gravwell
     DeriveGeneric
     RankNTypes
     ViewPatterns
+    TypeOperators
+    FlexibleInstances
+    MultiParamTypeClasses
+    DeriveAnyClass
+    GeneralizedNewtypeDeriving
+    InstanceSigs
   default-language: Haskell2010
   ghc-options: -Wall
   main-is: Main.hs
@@ -31,3 +38,5 @@ executable gravwell
     Game
     Card
     Player
+    Zoomy
+    RandomEffect

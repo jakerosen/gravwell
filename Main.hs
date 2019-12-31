@@ -2,10 +2,11 @@
 
 module Main where
 
+import Data.Function ((&))
 import Control.Category ((>>>))
 import Control.Lens ((^.))
 import Data.Foldable (foldlM)
-import Data.Functor ((<&>), void)
+import Data.Functor (void)
 import Data.List (intercalate)
 import Data.Maybe
 import qualified System.Console.ANSI as Ansi
@@ -14,10 +15,13 @@ import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
+import Control.Algebra
+import Control.Carrier.Lift
 
 import Card
 import Game
 import Player
+import RandomEffect
 
 debug :: Bool
 debug =
@@ -42,10 +46,17 @@ loop game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    RoundBegan next -> do
-      putStrLn "Pick a card."
+    RoundBegan2 next -> do
+      let
+        again = do
+          putStrLn "Pick a card."
+          x <- getInt
+          case next x of
+            Nothing -> again
+            Just action -> loop =<< (action & runRandom & runM)
+      again
 
-      untilJust ( getInt <&> next ) >>= loop
+      -- untilJust ( getInt <&> next ) >>= loop
 
     DraftBegan next -> do
       putStrLn "Press enter to draft."
@@ -106,6 +117,8 @@ displayGame game@Game{..} = do
     let ppState s = "State: " ++ show s
     putStrLn ( ppPlayer "1" gamePlayer1 )
     putStrLn ( ppPlayer "2" gamePlayer2 )
+    putStrLn ( ppPlayer "3" gamePlayer3 )
+    putStrLn ( ppPlayer "4" gamePlayer4 )
     putStrLn ( ppDerelict "1" gameDerelict1 )
     putStrLn ( ppDerelict "2" gameDerelict2 )
     putStrLn ( ppState gameState )

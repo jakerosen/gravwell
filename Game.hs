@@ -8,8 +8,6 @@ module Game where
 import Card
 import Control.Lens
 import Control.Monad.Random
-import Control.Monad.State.Lazy (State, runState)
-import qualified Control.Monad.State.Lazy as State
 import Data.Foldable (for_, traverse_)
 import Data.Generics.Labels ()
 -- import Control.Monad
@@ -25,7 +23,10 @@ import Player
 import System.Random (StdGen)
 import qualified System.Random as Random
 import System.Random.Shuffle (shuffle')
-
+import Control.Algebra
+import Control.Carrier.State.Strict
+import Zoomy
+import RandomEffect
 
 data Game = Game
   { gamePlayer1 :: Player
@@ -40,7 +41,7 @@ data Game = Game
 
 instance Show GameState where
   show = \case
-    RoundBegan{} -> "RoundBegan"
+    RoundBegan2{} -> "RoundBegan"
     DraftBegan{} -> "DraftBegan"
     RoundEnded{} -> "RoundEnded"
 
@@ -129,7 +130,9 @@ gameShipsList game =
   ] ++ map (view #playerShip) (gamePlayers game)
 
 data GameState =
-    RoundBegan (Int -> Maybe Game)
+    -- RoundBegan (Int -> Maybe Game)
+    RoundBegan2 (forall sig m.
+      (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
   | DraftBegan Game
   | RoundEnded Game
 
@@ -151,13 +154,18 @@ initialGame ran = setStateDraftBegan
 setStateRoundBegan :: Game -> Game
 setStateRoundBegan game0 = game1
   where
-    f :: Int -> Maybe Game
+    -- f :: Int -> Maybe Game
+    -- f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
+    --   then Nothing
+    --   else Just $ handlePlayCard x game1
+
+    f :: (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game)
     f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
       then Nothing
-      else Just $ handlePlayCard x game1
+      else Just (handlePlayCard x & execState game1)
 
     game1 :: Game
-    game1 = game0 { gameState = RoundBegan f }
+    game1 = game0 { gameState = RoundBegan2 f }
 
 -- Sets the game state of this Game to DraftBegan
 setStateDraftBegan :: Game -> Game
@@ -196,10 +204,22 @@ setStateRoundEnded game0 = game1
     game2 :: Game
     game2 = setStateDraftBegan game1
 
+aiPickCard
+  :: (Has RandomEffect sig m, Has (State Player) sig m)
+  => m Card
+aiPickCard = do
+  player <- get
+  let range = length (player ^. #playerHand) - 1
+  i <- randomInt 0 range
+  let (card, player') = pluckPlayer i player
+  put player'
+  pure card
+
 -- Play the Card at this index and determine the resulting game
 -- This must be a valid index
-handlePlayCard :: Int -> Game -> Game
-handlePlayCard x game0 =
+handlePlayCard :: forall sig m. (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
+handlePlayCard x = do
+  game0 <- get @Game
   let
     handSize :: Int
     handSize = length (game0 ^. #gamePlayer1 . #playerHand)
@@ -214,23 +234,7 @@ handlePlayCard x game0 =
     --  -> [Player]
     --  -> Rand StdGen [(Card, Player)]
 
-    aiPickCard :: Player -> Rand StdGen (Card, Player)
-    aiPickCard player = do
-      let range = length (player ^. #playerHand) - 1
-      i <- getRandomR (0, range)
-      pure $ pluckPlayer i player
-
-    aiPickCard' :: Lens' Game Player -> State Game Card
-    aiPickCard' player = do
-      game <- State.get
-      let
-        ran = game ^. #gameRandom
-        rand = aiPickCard (game ^. player)
-        ((card, player'), ran') = runRand rand ran
-      State.put (game & player .~ player' & #gameRandom .~ ran')
-      pure card
-
-    aiPicks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
+    aiPicks :: m [(ALens' Game Int, [ALens' Game Int], Card)]
     aiPicks =
       for [2, 3, 4] \playerNum -> do
         let
@@ -243,13 +247,13 @@ handlePlayCard x game0 =
           otherShips :: [ALens' Game Int]
           otherShips = gameOtherShips Map.! playerNum
 
-        card <- aiPickCard' player
+        card <- zoomy player aiPickCard
         pure (ship, otherShips, card)
 
-    pick :: State Game Card
-    pick = zoom (#gamePlayer1 . #playerHand) (pluckCard' x)
+    pick :: m Card
+    pick = zoomy @Game (#gamePlayer1 . #playerHand) (pluckCard'FE x)
 
-    picks :: State Game [(ALens' Game Int, [ALens' Game Int], Card)]
+    picks :: m [(ALens' Game Int, [ALens' Game Int], Card)]
     picks = do
       card <- pick
       ais <- aiPicks
@@ -272,19 +276,19 @@ handlePlayCard x game0 =
       :: Card
       -> Lens' Game Int
       -> [ALens' Game Int]
-      -> State Game ()
+      -> m ()
     playCard card ship otherShips = do
       let
         moveAmount = cardAmount card
       case cardType card of
         Fuel ->
-          State.modify \game ->
+          modify \game ->
             moveShip' moveAmount (gameMotion game) ship game
         Repulsor ->
-          State.modify \game ->
+          modify \game ->
             moveShip' moveAmount (negate . gameMotion game) ship game
         Tractor -> do
-          game <- State.get
+          game <- get
           let
             otherShips' = otherShips
           for_ otherShips' \(cloneLens -> otherShip) ->
@@ -293,7 +297,7 @@ handlePlayCard x game0 =
               f :: Int -> Int
               f p2 = signum (p1 - p2)
 
-            in State.modify (moveShip' moveAmount f otherShip)
+            in modify (moveShip' moveAmount f otherShip)
 
     -- m :: State Game
     -- a :: [stuff]
@@ -308,17 +312,18 @@ handlePlayCard x game0 =
     --  -> ([stuff] -> State Game ())
     --  -> State Game ()
 
-    gameS :: State Game ()
-    gameS = picks >>= traverse_ \((cloneLens -> player), otherShips, card)
-      -> playCard card player otherShips
+  picks
+    >>= traverse_\((cloneLens -> player), otherShips, card)
+    -> playCard card player otherShips
 
-    game1 :: Game
-    game1 = snd $ runState gameS game0
-
-  in if x < 0 || x >= handSize then error "Invalid card index" else
+  modify $ if x < 0 || x >= handSize then error "Invalid card index" else
     if handSize == 1
-      then setStateRoundEnded game1
-      else setStateRoundBegan game1
+      then setStateRoundEnded
+      else setStateRoundBegan
+  -- put $ if x < 0 || x >= handSize then error "Invalid card index" else
+  --   if handSize == 1
+  --     then setStateRoundEnded game1
+  --     else setStateRoundBegan game1
 
 -- Play this Card and determine the resulting Game
 moveShip

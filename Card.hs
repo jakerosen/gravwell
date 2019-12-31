@@ -4,6 +4,9 @@ import Data.List (delete)
 import Control.Monad.State.Lazy (State)
 import qualified Control.Monad.State.Lazy as State
 import GHC.Generics (Generic)
+-- import qualified Control.Carrier.State.Strict as FE
+import qualified Control.Effect.State as FE
+import qualified Control.Algebra as FE
 
 data Card = Card
   { cardSymbol :: String
@@ -21,8 +24,31 @@ pluckCard i cards =
     cards' = delete card cards
   in (card, cards')
 
+pluckCardFE :: Int -> [Card] -> ([Card], Card)
+pluckCardFE i cards =
+  let
+    card = cards !! i
+    cards' = delete card cards
+  in (cards', card)
+
 pluckCard' :: Int -> State [Card] Card
 pluckCard' n = State.state (pluckCard n)
+
+-- pluckCard'FE
+--   :: Applicative m--FE.Has (FE.State [Card]) sig m
+--   => Int
+--   -> FE.StateC [Card] m Card
+-- pluckCard'FE n = FE.StateC (pure <$> pluckCardFE n)
+
+pluckCard'FE
+  :: (FE.Has (FE.State [Card]) sig m, FE.Effect sig)
+  => Int
+  -> m Card
+pluckCard'FE n = do
+  cards <- FE.get
+  let (cards', card) = pluckCardFE n cards
+  FE.put cards'
+  pure card
 
 deck :: [Card]
 deck =
