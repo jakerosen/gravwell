@@ -15,7 +15,7 @@ import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
-import Control.Algebra
+-- import Control.Algebra
 import Control.Carrier.Lift
 
 import Card
@@ -46,7 +46,7 @@ loop game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    RoundBegan2 next -> do
+    RoundBegan next -> do
       let
         again = do
           putStrLn "Pick a card."

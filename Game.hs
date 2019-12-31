@@ -41,7 +41,7 @@ data Game = Game
 
 instance Show GameState where
   show = \case
-    RoundBegan2{} -> "RoundBegan"
+    RoundBegan{} -> "RoundBegan"
     DraftBegan{} -> "DraftBegan"
     RoundEnded{} -> "RoundEnded"
 
@@ -131,7 +131,7 @@ gameShipsList game =
 
 data GameState =
     -- RoundBegan (Int -> Maybe Game)
-    RoundBegan2 (forall sig m.
+    RoundBegan (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
   | DraftBegan Game
   | RoundEnded Game
@@ -165,7 +165,7 @@ setStateRoundBegan game0 = game1
       else Just (handlePlayCard x & execState game1)
 
     game1 :: Game
-    game1 = game0 { gameState = RoundBegan2 f }
+    game1 = game0 { gameState = RoundBegan f }
 
 -- Sets the game state of this Game to DraftBegan
 setStateDraftBegan :: Game -> Game
@@ -278,26 +278,27 @@ handlePlayCard x = do
       -> [ALens' Game Int]
       -> m ()
     playCard card ship otherShips = do
-      let
-        moveAmount = cardAmount card
-      case cardType card of
-        Fuel ->
-          modify \game ->
-            moveShip' moveAmount (gameMotion game) ship game
-        Repulsor ->
-          modify \game ->
-            moveShip' moveAmount (negate . gameMotion game) ship game
-        Tractor -> do
-          game <- get
-          let
-            otherShips' = otherShips
-          for_ otherShips' \(cloneLens -> otherShip) ->
+      g <- get
+      if gameOver g then pure () else do
+        let moveAmount = cardAmount card
+        case cardType card of
+          Fuel ->
+            modify \game ->
+              moveShip' moveAmount (gameMotion game) ship game
+          Repulsor ->
+            modify \game ->
+              moveShip' moveAmount (negate . gameMotion game) ship game
+          Tractor -> do
+            game <- get
             let
-              p1 = game ^. ship
-              f :: Int -> Int
-              f p2 = signum (p1 - p2)
+              otherShips' = otherShips
+            for_ otherShips' \(cloneLens -> otherShip) ->
+              let
+                p1 = game ^. ship
+                f :: Int -> Int
+                f p2 = signum (p1 - p2)
 
-            in modify (moveShip' moveAmount f otherShip)
+              in modify (moveShip' moveAmount f otherShip)
 
     -- m :: State Game
     -- a :: [stuff]
