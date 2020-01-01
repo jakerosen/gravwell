@@ -1,27 +1,10 @@
 {-# language RecordWildCards #-}
 module Game where
 
--- import Data.List (sort)
-
--- import Debug.Trace
-
--- import Data.Ord
--- import Control.Monad
-
--- import Data.Map.Lazy (Map)
--- import qualified Data.Map.Lazy as Map
--- import Data.Maybe
-
--- import Data.Traversable
-
--- import System.Random (StdGen)
--- import qualified System.Random as Random
--- import System.Random.Shuffle (shuffle')
-import Text.Printf
-import Control.Effect.Writer
 import Control.Algebra
 import Control.Carrier.State.Strict
 import Control.Effect.Lens (assign, modifying, use)
+import Control.Effect.Writer
 import Control.Lens hiding (assign, modifying, use)
 import Control.Monad.Random
 import Data.Foldable (for_)
@@ -31,9 +14,10 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import RandomEffect
+import Text.Printf
 
-import Player
 import Card
+import Player
 import Zoomy
 
 data Game = Game
@@ -48,13 +32,17 @@ data Game = Game
   , gameUndraftedCards :: [Card]
   } deriving stock (Show, Generic)
 
+-- The current game state to be parsed by the UI
 data GameState
   = DraftBegan (forall sig m.
       (Has RandomEffect sig m, Effect sig) => m Game)
+
   | PickCard (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
+
   | ResolvingMovement (forall sig m.
       (Has (Writer [String]) sig m, Effect sig) => m Game)
+
   | RoundEnded Game
 
 instance Show GameState where
@@ -79,6 +67,21 @@ data ShipNum
   | Derelict1
   | Derelict2
   deriving stock (Bounded, Enum, Eq, Show)
+
+-- The initial game
+initialGame :: Game
+initialGame = setStateDraftBegan
+  Game
+    { gamePlayer1 = Player 0 []
+    , gamePlayer2 = Player 0 []
+    , gamePlayer3 = Player 0 []
+    , gamePlayer4 = Player 0 []
+    , gameDerelict1 = 26
+    , gameDerelict2 = 36
+    , gameState = error "Initial state not set"
+    , gameUnplayedCards = []
+    , gameUndraftedCards = []
+    }
 
 -- The current number of players supported
 numPlayers :: Int
@@ -112,6 +115,7 @@ gameMotion game i =
     ships :: Set Int
     ships = gameShips game
 
+-- The list of game players
 gamePlayers :: Game -> [Player]
 gamePlayers game =
   [ gamePlayer1 game
@@ -120,6 +124,7 @@ gamePlayers game =
   , gamePlayer4 game
   ]
 
+-- gets the player lens from the player number
 playerNumToPlayer :: PlayerNum -> Lens' Game Player
 playerNumToPlayer = \case
   Player1 -> #gamePlayer1
@@ -127,6 +132,7 @@ playerNumToPlayer = \case
   Player3 -> #gamePlayer3
   Player4 -> #gamePlayer4
 
+-- gets the ship lens from the ship number
 gameShipByNum :: ShipNum -> Lens' Game Int
 gameShipByNum = \case
   Ship1 -> #gamePlayer1 . #playerShip
@@ -136,6 +142,7 @@ gameShipByNum = \case
   Derelict1 -> #gameDerelict1
   Derelict2 -> #gameDerelict2
 
+-- gets the ship number from the player number
 playerNumToShipNum :: PlayerNum -> ShipNum
 playerNumToShipNum = \case
   Player1 -> Ship1
@@ -143,58 +150,26 @@ playerNumToShipNum = \case
   Player3 -> Ship3
   Player4 -> Ship4
 
-
--- gameOtherShips :: Int -> ([ALens' Game Int])
--- gameOtherShips = \case
---   1 -> [ #gamePlayer2 . #playerShip
---        , #gamePlayer3 . #playerShip
---        , #gamePlayer4 . #playerShip
---        , #gameDerelict1, #gameDerelict2]
---   2 -> [ #gamePlayer1 . #playerShip
---        , #gamePlayer3 . #playerShip
---        , #gamePlayer4 . #playerShip
---        , #gameDerelict1, #gameDerelict2]
---   3 -> [ #gamePlayer1 . #playerShip
---        , #gamePlayer2 . #playerShip
---        , #gamePlayer4 . #playerShip
---        , #gameDerelict1, #gameDerelict2]
---   4 -> [ #gamePlayer1 . #playerShip
---        , #gamePlayer2 . #playerShip
---        , #gamePlayer3 . #playerShip
---        , #gameDerelict1, #gameDerelict2]
---   _ -> error "invalid player number"
-
-
+-- The condition for ending the game.
+-- Currently only checks if a ship is in the warp gate.
+-- Not yet implemented: After the 6th round, the game ends
 gameOver :: Game -> Bool
 gameOver game = any (>= gameWarpGate) (gameShipsList game)
 
+-- The position of the warp gate (the goal to reach)
 gameWarpGate :: Int
 gameWarpGate = 54
 
--- | Positions of all ships in the game
+-- | Positions of all ships in the game as a Set
 gameShips :: Game -> Set Int
 gameShips = Set.fromList . gameShipsList
 
+-- | Positions of all ships in the game as a List
 gameShipsList :: Game -> [Int]
 gameShipsList game =
   [ gameDerelict1 game
   , gameDerelict2 game
   ] ++ map (view #playerShip) (gamePlayers game)
-
--- The initial game state
-initialGame :: Game
-initialGame = setStateDraftBegan
-  Game
-    { gamePlayer1 = Player 0 []
-    , gamePlayer2 = Player 0 []
-    , gamePlayer3 = Player 0 []
-    , gamePlayer4 = Player 0 []
-    , gameDerelict1 = 26
-    , gameDerelict2 = 36
-    , gameState = undefined -- intentionally undefined, will be set later
-    , gameUnplayedCards = []
-    , gameUndraftedCards = []
-    }
 
 -- Sets the game state of this Game to PickCard
 setStatePickCard :: Game -> Game
@@ -213,6 +188,7 @@ setStatePickCard game0 = game1
     game1 :: Game
     game1 = game0 { gameState = PickCard f }
 
+-- Sets the game state of this Game to ResolvingMovement
 setStateResolvingMovement :: Game -> Game
 setStateResolvingMovement game0 = game1
   where
@@ -238,15 +214,14 @@ setStateRoundEnded game0 = game1
     game2 :: Game
     game2 = setStateDraftBegan game1
 
+-- Handles resolving a played card.
 handleResolveCard
   :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
   => m ()
 handleResolveCard = do
   ~((playerNum, card):cards) <- use @Game #gameUnplayedCards
   assign @Game #gameUnplayedCards cards
-  playCard
-    card
-    playerNum
+  playCard card playerNum
 
   hand <- use @Game (#gamePlayer1 . #playerHand)
 
@@ -258,6 +233,8 @@ handleResolveCard = do
       else setStatePickCard
     else setStateResolvingMovement
 
+-- Handles the draft.
+-- Currently just assigns 6 random cards to each player.
 handleDraftGame
   :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
 handleDraftGame = do
@@ -278,17 +255,20 @@ handleDraftGame = do
     & setStatePickCard
     )
 
+-- Pick card for an AI player
+-- Currently picks randomly
 aiPickCard
-  :: (Has RandomEffect sig m, Has (State Player) sig m)
+  :: (Has RandomEffect sig m, Has (State Player) sig m, Effect sig)
   => m Card
 aiPickCard = do
-  player <- get
+  player :: Player <- get
   let range = length (player ^. #playerHand) - 1
   i <- randomInt 0 range
-  let (card, player') = pluckPlayer i player
-  put player'
+  card <- zoomy @Player #playerHand (pluckCard' i)
   pure card
 
+-- handle the picks for all of the players, with the given index chosen by
+-- the player. This index must be valid.
 handlePickCards :: forall sig m.
   (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
 handlePickCards x = do
@@ -304,15 +284,8 @@ handlePickCards x = do
 
     pick :: m ()
     pick = do
-      card <- zoomy @Game (#gamePlayer1 . #playerHand) (pluckCard'FE x)
+      card <- zoomy @Game (#gamePlayer1 . #playerHand) (pluckCard' x)
       modifying @Game #gameUnplayedCards  ((Player1, card) :)
-      -- l @Game #gameUnplayedCards %= ((1,card) :)
-
-    -- picks :: m [(Int, Card)]
-    -- picks = do
-    --   card <- pick
-    --   ais <- aiPicks
-    --   pure $ orderPicks ((1, card):ais)
 
     orderPicks :: [(a, Card)] -> [(a, Card)]
     orderPicks = sortOn (view (_2 . #cardSymbol))
@@ -325,6 +298,7 @@ handlePickCards x = do
 l :: Lens' a b -> Lens' a b
 l = id
 
+-- Play this Card and determine the resulting Game
 playCard
   :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
   => Card
@@ -361,7 +335,7 @@ playCard card playerNum = do
 
         in moveShip' moveAmount f otherShip
 
--- Play this Card and determine the resulting Game
+-- Move the ship at this position
 moveShip
   :: Set Int -- occupied spaces
   -> (Int -> Int) -- motion
@@ -391,6 +365,7 @@ moveShip ships f fuel start =
 
     in newPosition
 
+-- monadic version of moveship
 moveShip'
   :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
   => Int -- fuel amount
@@ -414,6 +389,7 @@ moveShip' fuel f shipNum = do
 
   tell output
 
+-- validates the game to ensure it does not have an illegal state
 validateGame :: Game -> IO ()
 validateGame game@(Game { .. })  = do
   when
@@ -423,7 +399,6 @@ validateGame game@(Game { .. })  = do
       . filtered ((>6)
       . length))
       ( gamePlayers game ))
-    -- (any (\player -> length (playerHand player) > 6) (gamePlayers game))
     (die "Hand exceeded 6 cards")
 
   when (any (<0) (gameShips game)) (die "Ship index cannot be negative")

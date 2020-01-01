@@ -1,8 +1,9 @@
 module Zoomy where
 
-import Control.Lens
 import Control.Carrier.State.Strict
+import Control.Lens
 
+-- Implements lens zoom for fused-effects State
 zoomy
   :: forall s a sig m x. Has (State s) sig m
   => Lens' s a

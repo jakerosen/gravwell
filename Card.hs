@@ -1,13 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 module Card where
 
+import Control.Algebra
+import Control.Effect.State
 import Data.List (delete)
-import Control.Monad.State.Lazy (State)
-import qualified Control.Monad.State.Lazy as State
 import GHC.Generics (Generic)
--- import qualified Control.Carrier.State.Strict as FE
-import qualified Control.Effect.State as FE
-import qualified Control.Algebra as FE
 
 import ColorStrings
 
@@ -33,40 +30,27 @@ prettyCard Card{..} =
     s :: [ Char ]
     s = show cardAmount ++ " " ++ cardSymbol
 
+-- pretty prints the colored version of a card
 ppCard :: Card -> [Char]
 ppCard = snd . prettyCard
 
-pluckCard :: Int -> [Card] -> (Card, [Card])
+-- Plucks a card out of a list of cards (i.e. a hand)
+pluckCard :: Int -> [Card] -> ([Card], Card)
 pluckCard i cards =
-  let
-    card = cards !! i
-    cards' = delete card cards
-  in (card, cards')
-
-pluckCardFE :: Int -> [Card] -> ([Card], Card)
-pluckCardFE i cards =
   let
     card = cards !! i
     cards' = delete card cards
   in (cards', card)
 
-pluckCard' :: Int -> State [Card] Card
-pluckCard' n = State.state (pluckCard n)
-
--- pluckCard'FE
---   :: Applicative m--FE.Has (FE.State [Card]) sig m
---   => Int
---   -> FE.StateC [Card] m Card
--- pluckCard'FE n = FE.StateC (pure <$> pluckCardFE n)
-
-pluckCard'FE
-  :: (FE.Has (FE.State [Card]) sig m, FE.Effect sig)
+-- State based version of pluck card (which can be zoomed with zoomy)
+pluckCard'
+  :: (Has (State [Card]) sig m, Effect sig)
   => Int
   -> m Card
-pluckCard'FE n = do
-  cards <- FE.get
-  let (cards', card) = pluckCardFE n cards
-  FE.put cards'
+pluckCard' n = do
+  cards <- get
+  let (cards', card) = pluckCard n cards
+  put cards'
   pure card
 
 deck :: [Card]

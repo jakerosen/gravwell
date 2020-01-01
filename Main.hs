@@ -2,12 +2,12 @@
 
 module Main where
 
-import Data.Foldable (for_)
 import Control.Carrier.Writer.Strict
-import Data.Function ((&))
 import Control.Category ((>>>))
-import Control.Lens ((^.), (^..), folded, _2)
+import Control.Lens ((^.), (^..), _2, folded)
+import Data.Foldable (for_)
 import Data.Foldable (foldlM)
+import Data.Function ((&))
 import Data.Functor (void)
 import Data.List (intercalate)
 import Data.Maybe
@@ -15,17 +15,15 @@ import qualified System.Console.ANSI as Ansi
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
--- import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
--- import Control.Algebra
--- import Control.Carrier.Lift
 
 import Card
+import ColorStrings
 import Game
 import Player
 import RandomEffect
-import ColorStrings
 
+-- run the game in debug mode
 debug :: Bool
 debug =
   unsafePerformIO do
