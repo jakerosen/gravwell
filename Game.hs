@@ -5,8 +5,9 @@ module Game where
 
 -- import Debug.Trace
 
+-- import Data.Ord
 import Card
-import Control.Lens
+import Control.Lens hiding (modifying)
 import Control.Monad.Random
 import Data.Foldable (for_, traverse_)
 import Data.Generics.Labels ()
@@ -27,6 +28,7 @@ import Control.Algebra
 import Control.Carrier.State.Strict
 import Zoomy
 import RandomEffect
+import Control.Effect.Lens (modifying)
 
 data Game = Game
   { gamePlayer1 :: Player
@@ -37,11 +39,13 @@ data Game = Game
   , gameDerelict2 :: Int
   , gameState :: GameState
   , gameRandom :: StdGen
+  , gameUnplayedCards :: [(Int, Card)]
   } deriving stock (Show, Generic)
 
 instance Show GameState where
   show = \case
     RoundBegan{} -> "RoundBegan"
+    PicksBegan{} -> "PicksBegan"
     DraftBegan{} -> "DraftBegan"
     RoundEnded{} -> "RoundEnded"
 
@@ -129,9 +133,11 @@ gameShipsList game =
   , gameDerelict2 game
   ] ++ map (view #playerShip) (gamePlayers game)
 
-data GameState =
-    -- RoundBegan (Int -> Maybe Game)
-    RoundBegan (forall sig m.
+data GameState
+  = RoundBegan (forall sig m.
+      (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
+  -- | TurnBegan
+  | PicksBegan (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
   | DraftBegan Game
   | RoundEnded Game
@@ -148,6 +154,7 @@ initialGame ran = setStateDraftBegan
     , gameDerelict2 = 20
     , gameState = undefined -- intentionally undefined, will be set later
     , gameRandom = ran
+    , gameUnplayedCards = []
     }
 
 -- Sets the game state of this Game to RoundBegan
@@ -163,6 +170,23 @@ setStateRoundBegan game0 = game1
     f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
       then Nothing
       else Just (handlePlayCard x & execState game1)
+
+    game1 :: Game
+    game1 = game0 { gameState = RoundBegan f }
+
+-- Sets the game state of this Game to PicksBegan
+setStatePicksBegan :: Game -> Game
+setStatePicksBegan game0 = game1
+  where
+    -- f :: Int -> Maybe Game
+    -- f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
+    --   then Nothing
+    --   else Just $ handlePlayCard x game1
+
+    f :: (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game)
+    f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
+      then Nothing
+      else Just (handlePickCards x & execState game1)
 
     game1 :: Game
     game1 = game0 { gameState = RoundBegan f }
@@ -215,9 +239,49 @@ aiPickCard = do
   put player'
   pure card
 
+handlePickCards :: forall sig m.
+  (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
+handlePickCards x = do
+  let
+    aiPicks :: m ()
+    aiPicks =
+      for_ [2, 3, 4] \playerNum -> do
+        let
+          player :: Lens' Game Player
+          player = cloneLens $ gamePlayerByNum Map.! playerNum
+        card <- zoomy player aiPickCard
+        modifying @Game #gameUnplayedCards  ((playerNum, card) :)
+
+    pick :: m ()
+    pick = do
+      card <- zoomy @Game (#gamePlayer1 . #playerHand) (pluckCard'FE x)
+      modifying @Game #gameUnplayedCards  ((1, card) :)
+      -- l @Game #gameUnplayedCards %= ((1,card) :)
+
+    -- picks :: m [(Int, Card)]
+    -- picks = do
+    --   card <- pick
+    --   ais <- aiPicks
+    --   pure $ orderPicks ((1, card):ais)
+
+    orderPicks :: [(a, Card)] -> [(a, Card)]
+    orderPicks = sortOn (view (_2 . #cardSymbol))
+
+  aiPicks
+  pick
+  modifying @Game #gameUnplayedCards orderPicks
+
+l :: Lens' a b -> Lens' a b
+l = id
+
+-- #gameRound :: IsLabel "gameRound" a => a
+
+-- instance IsLabel "gameRound" (Lens' Game Int)
+
 -- Play the Card at this index and determine the resulting game
 -- This must be a valid index
-handlePlayCard :: forall sig m. (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
+handlePlayCard :: forall sig m.
+  (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
 handlePlayCard x = do
   game0 <- get @Game
   let

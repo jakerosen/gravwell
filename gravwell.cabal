@@ -15,6 +15,7 @@ executable gravwell
     MonadRandom,
     mtl,
     fused-effects,
+    fused-effects-lens,
   default-extensions:
     BlockArguments
     DerivingStrategies

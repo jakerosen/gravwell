@@ -58,6 +58,7 @@ loop' game = do
 
       -- untilJust ( getInt <&> next ) >>= loop
 
+    PicksBegan _ -> undefined
     DraftBegan next -> do
       putStrLn "Press enter to draft."
       _ <- getLine
