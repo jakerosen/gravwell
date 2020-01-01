@@ -34,24 +34,24 @@ prettyCard Card{..} =
 ppCard :: Card -> [Char]
 ppCard = snd . prettyCard
 
--- Plucks a card out of a list of cards (i.e. a hand)
-pluckCard :: Int -> [Card] -> ([Card], Card)
-pluckCard i cards =
+-- Plucks something out of a list
+pluck :: Eq a => Int -> [a] -> ([a], a)
+pluck n xs =
   let
-    card = cards !! i
-    cards' = delete card cards
-  in (cards', card)
+    x = xs !! n
+    xs' = delete x xs
+  in (xs', x)
 
--- State based version of pluck card (which can be zoomed with zoomy)
-pluckCard'
-  :: (Has (State [Card]) sig m, Effect sig)
+-- State based version of pluck (which can be zoomed with zoomy)
+pluck'
+  :: (Eq a, Has (State [a]) sig m, Effect sig)
   => Int
-  -> m Card
-pluckCard' n = do
-  cards <- get
-  let (cards', card) = pluckCard n cards
-  put cards'
-  pure card
+  -> m a
+pluck' n = do
+  xs <- get
+  let (xs', x) = pluck n xs
+  put xs'
+  pure x
 
 deck :: [Card]
 deck =
