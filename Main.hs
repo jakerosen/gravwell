@@ -2,6 +2,8 @@
 
 module Main where
 
+import Data.Foldable (for_)
+import Control.Carrier.Writer.Strict
 import Data.Function ((&))
 import Control.Category ((>>>))
 import Control.Lens ((^.), (^..), folded, _2)
@@ -31,12 +33,12 @@ debug =
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-  loop initialGame
+  loop [] initialGame
 
-loop :: Game -> IO ()
-loop game = do
+loop :: [String] -> Game -> IO ()
+loop output game = do
   validateGame game
-  displayGame game
+  displayGame game output
   if gameOver game
     then putStrLn "Game over!"
     else loop' game
@@ -47,7 +49,8 @@ loop' game = do
     ResolvingMovement next -> do
       putStrLn "Press enter."
       void getLine
-      next >>= loop
+      (output, game') <- next & runWriter
+      loop output game'
 
     PickCard next -> do
       let
@@ -56,17 +59,17 @@ loop' game = do
           x <- getInt
           case next x of
             Nothing -> again
-            Just action -> action & runRandom >>= loop
+            Just action -> action & runRandom >>= loop []
       again
 
     DraftBegan next -> do
       putStrLn "Press enter to draft."
       _ <- getLine
-      loop =<< (next & runRandom)
+      loop [] =<< (next & runRandom)
     RoundEnded next -> do
       putStrLn "Press enter to go to the next round."
       _ <- getLine
-      loop next
+      loop [] next
 
 untilJust :: IO ( Maybe a ) -> IO a
 untilJust action =
@@ -82,8 +85,8 @@ drawShip x y color = do
   Ansi.setCursorPosition x y
   putStr ( color ">" )
 
-displayGame :: Game -> IO ()
-displayGame game@Game{..} = do
+displayGame :: Game -> [String] -> IO ()
+displayGame game@Game{..} output = do
   Ansi.setCursorPosition 0 0
   Ansi.clearFromCursorToScreenEnd
 
@@ -113,6 +116,8 @@ displayGame game@Game{..} = do
     (game ^.. #gameUnplayedCards . folded . _2)
 
   Ansi.setCursorPosition 7 0
+
+  for_ output putStrLn
 
   if debug then do
     let ppCard = snd . prettyCard

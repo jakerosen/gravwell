@@ -55,27 +55,27 @@ deck =
   [ Card "A" 1 Fuel
   , Card "B" 2 Fuel
   , Card "C" 3 Fuel
-  , Card "D" 4 Fuel
-  , Card "E" 5 Fuel
+  , Card "Dy" 5 Fuel
+  , Card "Es" 2 Fuel
   , Card "F" 6 Fuel
-  , Card "G" 7 Fuel
-  , Card "H" 8 Fuel
-  , Card "I" 9 Fuel
-  , Card "J" 10 Fuel
-  , Card "K" 11 Fuel
-  , Card "L" 12 Fuel
-  , Card "M" 13 Fuel
-  , Card "N" 14 Fuel
-  , Card "O" 15 Fuel
-  , Card "P" 16 Fuel
-  , Card "Q" 17 Fuel
-  , Card "R" 18 Fuel
-  , Card "S" 19 Fuel
-  , Card "T" 20 Fuel
-  , Card "U" 21 Fuel
-  , Card "V" 22 Fuel
-  , Card "W" 23 Fuel
-  , Card "X" 24 Fuel
-  , Card "Y" 25 Fuel
-  , Card "Z" 26 Fuel
+  , Card "Ga" 5 Fuel
+  , Card "H" 4 Fuel
+  , Card "I" 6 Fuel
+  , Card "Jo" 2 Tractor
+  , Card "Kr" 2 Repulsor
+  , Card "Li" 4 Fuel
+  , Card "Mg" 10 Fuel
+  , Card "Ne" 6 Repulsor
+  , Card "O" 7 Fuel
+  , Card "Pu" 5 Fuel
+  , Card "Qt" 3 Tractor
+  , Card "Ra" 9 Fuel
+  , Card "Si" 9 Fuel
+  , Card "Th" 2 Fuel
+  , Card "U" 5 Repulsor
+  , Card "V" 7 Fuel
+  , Card "W" 8 Fuel
+  , Card "Xe" 3 Repulsor
+  , Card "Y" 8 Fuel
+  , Card "Zr" 7 Fuel
   ]

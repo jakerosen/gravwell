@@ -7,28 +7,32 @@ module Game where
 
 -- import Data.Ord
 import Card
-import Control.Lens hiding (modifying, use, assign)
-import Control.Monad.Random
-import Data.Foldable (for_)
-import Data.Generics.Labels ()
 -- import Control.Monad
-import Data.List
+
 -- import Data.Map.Lazy (Map)
 -- import qualified Data.Map.Lazy as Map
 -- import Data.Maybe
-import Data.Set (Set)
-import qualified Data.Set as Set
+
 -- import Data.Traversable
-import GHC.Generics (Generic)
-import Player
+
 -- import System.Random (StdGen)
 -- import qualified System.Random as Random
 -- import System.Random.Shuffle (shuffle')
+import Control.Effect.Writer
 import Control.Algebra
 import Control.Carrier.State.Strict
-import Zoomy
+import Control.Effect.Lens (assign, modifying, use)
+import Control.Lens hiding (assign, modifying, use)
+import Control.Monad.Random
+import Data.Foldable (for_)
+import Data.Generics.Labels ()
+import Data.List
+import Data.Set (Set)
+import qualified Data.Set as Set
+import GHC.Generics (Generic)
+import Player
 import RandomEffect
-import Control.Effect.Lens (modifying, use, assign)
+import Zoomy
 
 data Game = Game
   { gamePlayer1 :: Player
@@ -39,6 +43,7 @@ data Game = Game
   , gameDerelict2 :: Int
   , gameState :: GameState
   , gameUnplayedCards :: [(Int, Card)]
+  , gameUndraftedCards :: [Card]
   } deriving stock (Show, Generic)
 
 data GameState
@@ -47,7 +52,7 @@ data GameState
   | PickCard (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
   | ResolvingMovement (forall sig m.
-      (Algebra sig m, Effect sig) => m Game)
+      (Has (Writer [String]) sig m, Effect sig) => m Game)
   | RoundEnded Game
 
 instance Show GameState where
@@ -56,6 +61,15 @@ instance Show GameState where
     PickCard{} -> "PickCard"
     ResolvingMovement{} -> "ResolvingMovement"
     RoundEnded{} -> "RoundEnded"
+
+data ShipNum
+  = Ship1
+  | Ship2
+  | Ship3
+  | Ship4
+  | Derelict1
+  | Derelict2
+  deriving stock (Bounded, Enum, Eq, Show)
 
 -- The current number of players supported
 numPlayers :: Int
@@ -105,32 +119,50 @@ gamePlayerByNum = \case
   4 -> #gamePlayer4
   _ -> error "invalid player number"
 
-gameOtherShips :: Int -> ([ALens' Game Int])
-gameOtherShips = \case
-  1 -> [ #gamePlayer2 . #playerShip
-       , #gamePlayer3 . #playerShip
-       , #gamePlayer4 . #playerShip
-       , #gameDerelict1, #gameDerelict2]
-  2 -> [ #gamePlayer1 . #playerShip
-       , #gamePlayer3 . #playerShip
-       , #gamePlayer4 . #playerShip
-       , #gameDerelict1, #gameDerelict2]
-  3 -> [ #gamePlayer1 . #playerShip
-       , #gamePlayer2 . #playerShip
-       , #gamePlayer4 . #playerShip
-       , #gameDerelict1, #gameDerelict2]
-  4 -> [ #gamePlayer1 . #playerShip
-       , #gamePlayer2 . #playerShip
-       , #gamePlayer3 . #playerShip
-       , #gameDerelict1, #gameDerelict2]
+gameShipByNum :: ShipNum -> Lens' Game Int
+gameShipByNum = \case
+  Ship1 -> #gamePlayer1 . #playerShip
+  Ship2 -> #gamePlayer2 . #playerShip
+  Ship3 -> #gamePlayer3 . #playerShip
+  Ship4 -> #gamePlayer4 . #playerShip
+  Derelict1 -> #gameDerelict1
+  Derelict2 -> #gameDerelict2
+
+playerNumToShipNum :: Int -> ShipNum
+playerNumToShipNum = \case
+  1 -> Ship1
+  2 -> Ship2
+  3 -> Ship3
+  4 -> Ship4
   _ -> error "invalid player number"
+
+
+-- gameOtherShips :: Int -> ([ALens' Game Int])
+-- gameOtherShips = \case
+--   1 -> [ #gamePlayer2 . #playerShip
+--        , #gamePlayer3 . #playerShip
+--        , #gamePlayer4 . #playerShip
+--        , #gameDerelict1, #gameDerelict2]
+--   2 -> [ #gamePlayer1 . #playerShip
+--        , #gamePlayer3 . #playerShip
+--        , #gamePlayer4 . #playerShip
+--        , #gameDerelict1, #gameDerelict2]
+--   3 -> [ #gamePlayer1 . #playerShip
+--        , #gamePlayer2 . #playerShip
+--        , #gamePlayer4 . #playerShip
+--        , #gameDerelict1, #gameDerelict2]
+--   4 -> [ #gamePlayer1 . #playerShip
+--        , #gamePlayer2 . #playerShip
+--        , #gamePlayer3 . #playerShip
+--        , #gameDerelict1, #gameDerelict2]
+--   _ -> error "invalid player number"
 
 
 gameOver :: Game -> Bool
 gameOver game = any (>= gameWarpGate) (gameShipsList game)
 
 gameWarpGate :: Int
-gameWarpGate = 30
+gameWarpGate = 54
 
 -- | Positions of all ships in the game
 gameShips :: Game -> Set Int
@@ -150,10 +182,11 @@ initialGame = setStateDraftBegan
     , gamePlayer2 = Player 0 []
     , gamePlayer3 = Player 0 []
     , gamePlayer4 = Player 0 []
-    , gameDerelict1 = 10
-    , gameDerelict2 = 20
+    , gameDerelict1 = 26
+    , gameDerelict2 = 36
     , gameState = undefined -- intentionally undefined, will be set later
     , gameUnplayedCards = []
+    , gameUndraftedCards = []
     }
 
 -- Sets the game state of this Game to PickCard
@@ -198,14 +231,15 @@ setStateRoundEnded game0 = game1
     game2 :: Game
     game2 = setStateDraftBegan game1
 
-handleResolveCard :: (Has (State Game) sig m, Effect sig) => m ()
+handleResolveCard
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+  => m ()
 handleResolveCard = do
   ~((playerNum, card):cards) <- use @Game #gameUnplayedCards
   assign @Game #gameUnplayedCards cards
   playCard
     card
-    (gamePlayerByNum playerNum . #playerShip)
-    (gameOtherShips playerNum)
+    playerNum
 
   hand <- use @Game (#gamePlayer1 . #playerHand)
 
@@ -285,30 +319,35 @@ l :: Lens' a b -> Lens' a b
 l = id
 
 playCard
-  :: (Has (State Game) sig m, Effect sig)
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
   => Card
-  -> Lens' Game Int
-  -> [ALens' Game Int]
+  -> Int
   -> m ()
-playCard card ship otherShips = do
-  let moveAmount = cardAmount card
+playCard card playerNum = do
+  let
+    moveAmount = cardAmount card
   case cardType card of
-    Fuel ->
-      modify \game ->
-        moveShip' moveAmount (gameMotion game) ship game
-    Repulsor ->
-      modify \game ->
-        moveShip' moveAmount (negate . gameMotion game) ship game
+    Fuel -> do
+      motion <- gets gameMotion
+      moveShip' moveAmount motion (playerNumToShipNum playerNum)
+    Repulsor -> do
+      motion <- gets gameMotion
+      moveShip' moveAmount (negate . motion) (playerNumToShipNum playerNum)
     Tractor -> do
       game <- get
-      let otherShips' = otherShips
-      for_ otherShips' \(cloneLens -> otherShip) ->
+      let
+        p1 = game ^. gamePlayerByNum playerNum . #playerShip
+        otherShips =
+          sortOn
+            (\otherShip ->
+              abs (p1 - game ^. gameShipByNum otherShip))
+            (delete (playerNumToShipNum playerNum) [minBound .. maxBound])
+      for_ otherShips \otherShip ->
         let
-          p1 = game ^. ship
           f :: Int -> Int
           f p2 = signum (p1 - p2)
 
-        in modify (moveShip' moveAmount f otherShip)
+        in moveShip' moveAmount f otherShip
 
 -- Play this Card and determine the resulting Game
 moveShip
@@ -341,13 +380,22 @@ moveShip ships f fuel start =
     in newPosition
 
 moveShip'
-  :: Int -- fuel amount
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+  => Int -- fuel amount
   -> (Int -> Int) -- motion
-  -> Lens' Game Int -- The ship that is moving
-  -> Game -- starting pos
-  -> Game
-moveShip' fuel f ship game =
-  game & ship %~ moveShip (gameShips game) f fuel
+  -> ShipNum -- The moving ship
+  -> m ()
+moveShip' fuel f shipNum = do
+  game <- get @Game
+  let
+    ship :: Lens' Game Int
+    ship = gameShipByNum shipNum
+
+    pos1 = game ^. ship
+    pos2 = moveShip (gameShips game) f fuel pos1
+
+  assign ship pos2
+  tell [show (shipNum, pos1, pos2)]
 
 validateGame :: Game -> IO ()
 validateGame game@(Game { .. })  = do
