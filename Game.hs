@@ -13,11 +13,11 @@ import Data.List
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import RandomEffect
 import Text.Printf
 
 import Card
 import Player
+import RandomEffect
 import Zoomy
 
 data Game = Game
@@ -27,6 +27,7 @@ data Game = Game
   , gamePlayer4 :: Player
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
+  , gameRound :: Int
   , gameState :: GameState
   , gameUnplayedCards :: [(PlayerNum, Card)]
   , gameUndraftedCards :: [Card]
@@ -78,6 +79,7 @@ initialGame = setStateDraftBegan
     , gamePlayer4 = Player 0 []
     , gameDerelict1 = 26
     , gameDerelict2 = 36
+    , gameRound = 1
     , gameState = error "Initial state not set"
     , gameUnplayedCards = []
     , gameUndraftedCards = []
@@ -150,11 +152,13 @@ playerNumToShipNum = \case
   Player3 -> Ship3
   Player4 -> Ship4
 
--- The condition for ending the game.
--- Currently only checks if a ship is in the warp gate.
--- Not yet implemented: After the 6th round, the game ends
+-- The condition for ending the game. Either:
+-- A ship is in the warp gate or
+-- 6 Rounds are completed
 gameOver :: Game -> Bool
-gameOver game = any (>= gameWarpGate) (gameShipsList game)
+gameOver game =
+     game ^. #gameRound >= 7
+  || any (>= gameWarpGate) (gameShipsList game)
 
 -- The position of the warp gate (the goal to reach)
 gameWarpGate :: Int
@@ -229,7 +233,9 @@ handleResolveCard = do
     if null cards
     then
       if null hand
-      then setStateRoundEnded
+      then \game -> game
+        & #gameRound %~ (+1)
+        & setStateRoundEnded
       else setStatePickCard
     else setStateResolvingMovement
 

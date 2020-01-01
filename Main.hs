@@ -45,11 +45,11 @@ loop output game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    ResolvingMovement next -> do
-      putStrLn "Press enter."
-      void getLine
-      (output, game') <- next & runWriter
-      loop output game'
+    DraftBegan next -> do
+      putStrLn "Press enter to draft."
+      _ <- getLine
+      loop ["Round " ++ show (game ^. #gameRound) ++ ":"]
+        =<< (next & runRandom)
 
     PickCard next -> do
       let
@@ -61,10 +61,12 @@ loop' game = do
             Just action -> action & runRandom >>= loop []
       again
 
-    DraftBegan next -> do
-      putStrLn "Press enter to draft."
-      _ <- getLine
-      loop [] =<< (next & runRandom)
+    ResolvingMovement next -> do
+      putStrLn "Press enter."
+      void getLine
+      (output, game') <- next & runWriter
+      loop output game'
+
     RoundEnded next -> do
       putStrLn "Press enter to go to the next round."
       _ <- getLine
