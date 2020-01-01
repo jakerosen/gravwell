@@ -6,7 +6,6 @@ module Game where
 -- import Debug.Trace
 
 -- import Data.Ord
-import Card
 -- import Control.Monad
 
 -- import Data.Map.Lazy (Map)
@@ -18,6 +17,7 @@ import Card
 -- import System.Random (StdGen)
 -- import qualified System.Random as Random
 -- import System.Random.Shuffle (shuffle')
+import Text.Printf
 import Control.Effect.Writer
 import Control.Algebra
 import Control.Carrier.State.Strict
@@ -30,8 +30,10 @@ import Data.List
 import Data.Set (Set)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import Player
 import RandomEffect
+
+import Player
+import Card
 import Zoomy
 
 data Game = Game
@@ -42,7 +44,7 @@ data Game = Game
   , gameDerelict1 :: Int
   , gameDerelict2 :: Int
   , gameState :: GameState
-  , gameUnplayedCards :: [(Int, Card)]
+  , gameUnplayedCards :: [(PlayerNum, Card)]
   , gameUndraftedCards :: [Card]
   } deriving stock (Show, Generic)
 
@@ -61,6 +63,13 @@ instance Show GameState where
     PickCard{} -> "PickCard"
     ResolvingMovement{} -> "ResolvingMovement"
     RoundEnded{} -> "RoundEnded"
+
+data PlayerNum
+  = Player1
+  | Player2
+  | Player3
+  | Player4
+  deriving stock (Bounded, Enum, Eq, Show)
 
 data ShipNum
   = Ship1
@@ -111,13 +120,12 @@ gamePlayers game =
   , gamePlayer4 game
   ]
 
-gamePlayerByNum :: Int -> Lens' Game Player
-gamePlayerByNum = \case
-  1 -> #gamePlayer1
-  2 -> #gamePlayer2
-  3 -> #gamePlayer3
-  4 -> #gamePlayer4
-  _ -> error "invalid player number"
+playerNumToPlayer :: PlayerNum -> Lens' Game Player
+playerNumToPlayer = \case
+  Player1 -> #gamePlayer1
+  Player2 -> #gamePlayer2
+  Player3 -> #gamePlayer3
+  Player4 -> #gamePlayer4
 
 gameShipByNum :: ShipNum -> Lens' Game Int
 gameShipByNum = \case
@@ -128,13 +136,12 @@ gameShipByNum = \case
   Derelict1 -> #gameDerelict1
   Derelict2 -> #gameDerelict2
 
-playerNumToShipNum :: Int -> ShipNum
+playerNumToShipNum :: PlayerNum -> ShipNum
 playerNumToShipNum = \case
-  1 -> Ship1
-  2 -> Ship2
-  3 -> Ship3
-  4 -> Ship4
-  _ -> error "invalid player number"
+  Player1 -> Ship1
+  Player2 -> Ship2
+  Player3 -> Ship3
+  Player4 -> Ship4
 
 
 -- gameOtherShips :: Int -> ([ALens' Game Int])
@@ -288,17 +295,17 @@ handlePickCards x = do
   let
     aiPicks :: m ()
     aiPicks =
-      for_ [2, 3, 4] \playerNum -> do
+      for_ [Player2 .. maxBound] \playerNum -> do
         let
           player :: Lens' Game Player
-          player = cloneLens $ gamePlayerByNum playerNum
+          player = cloneLens $ playerNumToPlayer playerNum
         card <- zoomy player aiPickCard
         modifying @Game #gameUnplayedCards  ((playerNum, card) :)
 
     pick :: m ()
     pick = do
       card <- zoomy @Game (#gamePlayer1 . #playerHand) (pluckCard'FE x)
-      modifying @Game #gameUnplayedCards  ((1, card) :)
+      modifying @Game #gameUnplayedCards  ((Player1, card) :)
       -- l @Game #gameUnplayedCards %= ((1,card) :)
 
     -- picks :: m [(Int, Card)]
@@ -321,11 +328,16 @@ l = id
 playCard
   :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
   => Card
-  -> Int
+  -> PlayerNum
   -> m ()
 playCard card playerNum = do
   let
     moveAmount = cardAmount card
+
+    output :: [String]
+    output = [printf "%s plays %s" (show playerNum) (ppCard card)]
+  tell output
+
   case cardType card of
     Fuel -> do
       motion <- gets gameMotion
@@ -336,7 +348,7 @@ playCard card playerNum = do
     Tractor -> do
       game <- get
       let
-        p1 = game ^. gamePlayerByNum playerNum . #playerShip
+        p1 = game ^. playerNumToPlayer playerNum . #playerShip
         otherShips =
           sortOn
             (\otherShip ->
@@ -395,7 +407,12 @@ moveShip' fuel f shipNum = do
     pos2 = moveShip (gameShips game) f fuel pos1
 
   assign ship pos2
-  tell [show (shipNum, pos1, pos2)]
+
+  let
+    output :: [String]
+    output = [printf "%s moves from %d to %d" (show shipNum) pos1 pos2]
+
+  tell output
 
 validateGame :: Game -> IO ()
 validateGame game@(Game { .. })  = do

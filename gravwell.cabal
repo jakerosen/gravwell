@@ -41,3 +41,4 @@ executable gravwell
     Player
     Zoomy
     RandomEffect
+    ColorStrings

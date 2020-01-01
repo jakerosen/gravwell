@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Card where
 
 import Data.List (delete)
@@ -8,6 +9,8 @@ import GHC.Generics (Generic)
 import qualified Control.Effect.State as FE
 import qualified Control.Algebra as FE
 
+import ColorStrings
+
 data Card = Card
   { cardSymbol :: String
   , cardAmount :: Int
@@ -16,6 +19,22 @@ data Card = Card
 
 data CardType = Fuel | Repulsor | Tractor
   deriving stock ( Show, Eq )
+
+-- | Returns (uncolored, colored)
+prettyCard :: Card -> ( [ Char ], [ Char ] )
+prettyCard Card{..} =
+  ( s
+  , case cardType of
+      Fuel -> green s
+      Repulsor -> magenta s
+      Tractor -> cyan s
+  )
+  where
+    s :: [ Char ]
+    s = show cardAmount ++ " " ++ cardSymbol
+
+ppCard :: Card -> [Char]
+ppCard = snd . prettyCard
 
 pluckCard :: Int -> [Card] -> (Card, [Card])
 pluckCard i cards =

@@ -24,6 +24,7 @@ import Card
 import Game
 import Player
 import RandomEffect
+import ColorStrings
 
 debug :: Bool
 debug =
@@ -117,10 +118,7 @@ displayGame game@Game{..} output = do
 
   Ansi.setCursorPosition 7 0
 
-  for_ output putStrLn
-
   if debug then do
-    let ppCard = snd . prettyCard
     let ppDerelict n derelict = "Derelict " ++ n ++ ": Ship = " ++ show derelict
     let ppHand = intercalate ", " . map ppCard
     let ppPlayer n player =
@@ -141,6 +139,10 @@ displayGame game@Game{..} output = do
   else do
     putStrLn "Run with 'debug' environment var to see debug game state.\n"
 
+  for_ output putStrLn
+  putStrLn ""
+
+
 -- | Display a card at the given (row, col) and return how many characters wide
 -- it is.
 displayCard :: ( Int, Int ) -> Card -> IO Int
@@ -150,33 +152,6 @@ displayCard ( row, col ) card = do
     ( uncolored, colored ) -> do
       putStr colored
       pure ( length uncolored )
-
--- | Returns (uncolored, colored)
-prettyCard :: Card -> ( [ Char ], [ Char ] )
-prettyCard Card{..} =
-  ( s
-  , case cardType of
-      Fuel -> green s
-      Repulsor -> magenta s
-      Tractor -> cyan s
-  )
-  where
-    s :: [ Char ]
-    s = show cardAmount ++ " " ++ cardSymbol
-
-blue, green, red, black, magenta, cyan :: [ Char ] -> [ Char ]
-blue = style ( fg Ansi.Blue )
-green = style ( fg Ansi.Green )
-red = style ( fg Ansi.Red )
-black = style ( fg Ansi.Black )
-magenta = style ( fg Ansi.Magenta )
-cyan = style ( fg Ansi.Cyan )
-
-fg :: Ansi.Color -> Ansi.SGR
-fg c = Ansi.SetColor Ansi.Foreground Ansi.Vivid c
-
-style :: Ansi.SGR -> [ Char ] -> [ Char ]
-style c s = Ansi.setSGRCode [ c ] ++ s ++ Ansi.setSGRCode [ Ansi.Reset ]
 
 foldlM_
   :: ( Foldable t, Monad m )
