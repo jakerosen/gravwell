@@ -4,7 +4,7 @@ module Main where
 
 import Data.Function ((&))
 import Control.Category ((>>>))
-import Control.Lens ((^.))
+import Control.Lens ((^.), (^..), folded, _2)
 import Data.Foldable (foldlM)
 import Data.Functor (void)
 import Data.List (intercalate)
@@ -13,10 +13,10 @@ import qualified System.Console.ANSI as Ansi
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (NoBuffering), hSetBuffering, stdout)
 import System.IO.Unsafe (unsafePerformIO)
-import System.Random (StdGen, getStdGen)
+-- import System.Random (StdGen, getStdGen)
 import Text.Read (readMaybe)
 -- import Control.Algebra
-import Control.Carrier.Lift
+-- import Control.Carrier.Lift
 
 import Card
 import Game
@@ -31,9 +31,7 @@ debug =
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-
-  random :: StdGen <- getStdGen
-  loop (initialGame random)
+  loop initialGame
 
 loop :: Game -> IO ()
 loop game = do
@@ -46,23 +44,25 @@ loop game = do
 loop' :: Game -> IO ()
 loop' game = do
   case gameState game of
-    RoundBegan next -> do
+    ResolvingMovement next -> do
+      putStrLn "Press enter."
+      void getLine
+      next >>= loop
+
+    PickCard next -> do
       let
         again = do
           putStrLn "Pick a card."
           x <- getInt
           case next x of
             Nothing -> again
-            Just action -> loop =<< (action & runRandom & runM)
+            Just action -> action & runRandom >>= loop
       again
 
-      -- untilJust ( getInt <&> next ) >>= loop
-
-    PicksBegan _ -> undefined
     DraftBegan next -> do
       putStrLn "Press enter to draft."
       _ <- getLine
-      loop next
+      loop =<< (next & runRandom)
     RoundEnded next -> do
       putStrLn "Press enter to go to the next round."
       _ <- getLine
@@ -103,7 +103,16 @@ displayGame game@Game{..} = do
     0
     (game ^. #gamePlayer1 . #playerHand)
 
-  Ansi.setCursorPosition 5 0
+  foldlM_
+    ( \n card -> do
+        m <- displayCard ( 5, n ) card
+        putStr ", "
+        pure ( n + m + 2 )
+    )
+    0
+    (game ^.. #gameUnplayedCards . folded . _2)
+
+  Ansi.setCursorPosition 7 0
 
   if debug then do
     let ppCard = snd . prettyCard
