@@ -38,9 +38,6 @@ data GameState
   = DraftBegan (forall sig m.
       (Has RandomEffect sig m, Effect sig) => m Game)
 
-  | DraftBegan2 (forall sig m.
-      (Has RandomEffect sig m, Effect sig) => m Game)
-
   | DraftPick (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
 
@@ -55,7 +52,6 @@ data GameState
 instance Show GameState where
   show = \case
     DraftBegan{} -> "DraftBegan"
-    DraftBegan2{} -> "DraftBegan"
     DraftPick{} -> "DraftPick"
     PickCard{} -> "PickCard"
     ResolvingMovement{} -> "ResolvingMovement"
@@ -217,14 +213,6 @@ setStateDraftBegan game0 = game1
       { gameState = DraftBegan (handleDraftBegan & execState game1) }
 
 -- Sets the game state of this Game to DraftBegan
-setStateDraftBegan2 :: Game -> Game
-setStateDraftBegan2 game0 = game1
-  where
-    game1 :: Game
-    game1 = game0
-      { gameState = DraftBegan2 (handleDraftBegan2 & execState game1) }
-
--- Sets the game state of this Game to DraftBegan
 setStateDraftPick :: Game -> Game
 setStateDraftPick game0 = game1
   where
@@ -273,28 +261,6 @@ handleResolveCard = do
 handleDraftBegan
   :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
 handleDraftBegan = do
-  deck' <- shuffleCards deck
-
-  let
-    (draftHand1, (draftHand2, (draftHand3, (draftHand4, _))))
-      =             (splitAt 6 deck') -- hand 1
-      & _2 %~       (splitAt 6) -- hand 2
-      & _2._2 %~    (splitAt 6) -- hand 3
-      & _2._2._2 %~ (splitAt 6) -- hand 4
-
-  modify @Game (\game -> game
-    & #gamePlayer1 . #playerHand .~ draftHand1
-    & #gamePlayer2 . #playerHand .~ draftHand2
-    & #gamePlayer3 . #playerHand .~ draftHand3
-    & #gamePlayer4 . #playerHand .~ draftHand4
-    & setStatePickCard
-    )
-
--- Handles the draft.
--- Currently just assigns 6 random cards to each player.
-handleDraftBegan2
-  :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
-handleDraftBegan2 = do
   deck' <- shuffleCards deck
   let
     numPiles = numPlayers * 3

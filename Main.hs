@@ -51,9 +51,15 @@ loop' game = do
       loop ["Round " ++ show (game ^. #gameRound) ++ ":"]
         =<< (next & runRandom)
 
-    DraftBegan2 _ -> error "not yet implemented DraftBegan2"
-
-    DraftPick _ -> error "not yet implemented DraftPick"
+    DraftPick next -> do
+      let
+        again = do
+          putStrLn "Pick a card."
+          x <- getInt
+          case next x of
+            Nothing -> again
+            Just action -> action & runRandom >>= loop []
+      again
 
     PickCard next -> do
       let
@@ -111,14 +117,31 @@ displayGame game@Game{..} output = do
     0
     (game ^. #gamePlayer1 . #playerHand)
 
-  foldlM_
-    ( \n card -> do
-        m <- displayCard ( 5, n ) card
-        putStr ", "
-        pure ( n + m + 2 )
-    )
-    0
-    (game ^.. #gameUnplayedCards . folded . _2)
+
+  case gameState of
+    DraftPick _ -> do
+      let
+        visible :: [Card]
+        visible = game ^. #gameUndraftedCards & map fst
+
+      foldlM_
+        ( \n card -> do
+            m <- displayCard ( 5, n ) card
+            putStr ", "
+            pure ( n + m + 2 )
+        )
+        0
+        visible
+
+    _ ->
+      foldlM_
+        ( \n card -> do
+            m <- displayCard ( 5, n ) card
+            putStr ", "
+            pure ( n + m + 2 )
+        )
+        0
+        (game ^.. #gameUnplayedCards . folded . _2)
 
   Ansi.setCursorPosition 7 0
 
