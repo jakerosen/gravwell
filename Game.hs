@@ -312,18 +312,38 @@ handleDraftBegan2 = do
 -- Handles the draft.
 -- Currently just assigns 6 random cards to each player.
 handleDraftPick
-  :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig)
+  :: forall sig m.
+    (Has (State Game) sig m, Has RandomEffect sig m, Effect sig)
   => Int
   -> m ()
 handleDraftPick x = do
-  undraftedCards <- use @Game #gameUndraftedCards
-  let
-    (c1, c2) = pluck x undraftedCards
+  pickedCards :: (Card, Card) <- zoomy @Game #gameUndraftedCards (pluck' x)
+  modifying @Game (#gamePlayer1 . #playerHand) (pickedCards ^.. both ++)
 
+  -- AI draft picks
+  for_ [Player2 .. maxBound] \playerNum -> do
+    let
+      player :: Lens' Game Player
+      player = playerNumToPlayer playerNum
+    aiDraftCards player
 
-  modify @Game (\game -> game
-    & setStatePickCard
-    )
+  toPick <- use @Game #gameUndraftedCards
+  modify
+    if null toPick
+    then setStatePickCard
+    else setStateDraftPick
+
+-- Drafts cards for an AI player
+-- Currently picks randomly
+aiDraftCards
+  :: (Has RandomEffect sig m, Has (State Game) sig m, Effect sig )
+  => Lens' Game Player
+  -> m ()
+aiDraftCards player = do
+  len :: Int <- use @Game (#gameUndraftedCards . to length)
+  i <- randomInt 0 (len - 1)
+  pickedCards :: (Card, Card) <- zoomy @Game #gameUndraftedCards (pluck' i)
+  modifying @Game (player . #playerHand) (pickedCards ^.. both ++)
 
 -- Pick card for an AI player
 -- Currently picks randomly
