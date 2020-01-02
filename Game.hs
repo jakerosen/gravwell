@@ -31,6 +31,7 @@ data Game = Game
   , gameState :: GameState
   , gameUnplayedCards :: [(PlayerNum, Card)]
   , gameUndraftedCards :: [(Card, Card)]
+  , gameDraftOrder :: [PlayerNum]
   } deriving stock (Show, Generic)
 
 -- The current game state to be parsed by the UI
@@ -38,8 +39,17 @@ data GameState
   = DraftBegan (forall sig m.
       (Has RandomEffect sig m, Effect sig) => m Game)
 
+  | DraftBegan2 (forall sig m.
+      (Has RandomEffect sig m, Effect sig) => m Game)
+
   | DraftPick (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
+
+  | DraftPickPlayer (forall sig m.
+      (Algebra sig m, Effect sig) => Int -> Maybe (m Game))
+
+  | DraftPickAI (forall sig m.
+      (Has RandomEffect sig m, Effect sig) => m Game)
 
   | PickCard (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
@@ -52,7 +62,10 @@ data GameState
 instance Show GameState where
   show = \case
     DraftBegan{} -> "DraftBegan"
+    DraftBegan2{} -> "DraftBegan"
     DraftPick{} -> "DraftPick"
+    DraftPickPlayer{} -> "DraftPickPlayer"
+    DraftPickAI{} -> "DraftPickAI"
     PickCard{} -> "PickCard"
     ResolvingMovement{} -> "ResolvingMovement"
     RoundEnded{} -> "RoundEnded"
@@ -87,6 +100,7 @@ initialGame = setStateDraftBegan
     , gameState = error "Initial state not set"
     , gameUnplayedCards = []
     , gameUndraftedCards = []
+    , gameDraftOrder = []
     }
 
 -- The current number of players supported
@@ -213,6 +227,14 @@ setStateDraftBegan game0 = game1
       { gameState = DraftBegan (handleDraftBegan & execState game1) }
 
 -- Sets the game state of this Game to DraftBegan
+setStateDraftBegan2 :: Game -> Game
+setStateDraftBegan2 game0 = game1
+  where
+    game1 :: Game
+    game1 = game0
+      { gameState = DraftBegan (handleDraftBegan2 & execState game1) }
+
+-- Sets the game state of this Game to DraftBegan
 setStateDraftPick :: Game -> Game
 setStateDraftPick game0 = game1
   where
@@ -224,6 +246,27 @@ setStateDraftPick game0 = game1
     game1 :: Game
     game1 = game0
       { gameState = DraftPick f }
+
+-- Sets the game state of this Game to DraftBegan
+setStateDraftPickPlayer :: Game -> Game
+setStateDraftPickPlayer game0 = game1
+  where
+    f :: (Algebra sig m, Effect sig) => Int -> Maybe (m Game)
+    f x = if x >= length (game1 ^. #gameUndraftedCards)
+      then Nothing
+      else Just (handleDraftPickPlayer x & execState game1)
+
+    game1 :: Game
+    game1 = game0
+      { gameState = DraftPickPlayer f }
+
+-- Sets the game state of this Game to DraftBegan
+setStateDraftPickAI :: Game -> Game
+setStateDraftPickAI game0 = game1
+  where
+    game1 :: Game
+    game1 = game0
+      { gameState = DraftPickAI (handleDraftPickAI & execState game1) }
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game
@@ -277,6 +320,33 @@ handleDraftBegan = do
 
 -- Handles the draft.
 -- Currently just assigns 6 random cards to each player.
+handleDraftBegan2
+  :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
+handleDraftBegan2 = do
+  deck' <- shuffleCards deck
+  let
+    numPiles = numPlayers * 3
+    usedCards = take (numPiles * 2) deck'
+
+    -- (revealed, hidden)
+    piles :: [(Card, Card)]
+    piles = uncurry zip (splitAt numPiles usedCards)
+
+    order :: [PlayerNum]
+    order = concat $ replicate 3 [minBound .. maxBound]
+
+    p1 :: PlayerNum
+    p1 = head order
+
+  modify @Game (\game -> game
+    & #gameUndraftedCards .~ piles
+    & #gameDraftOrder .~ order
+    & case p1 of
+      Player1 -> setStateDraftPickPlayer
+      _ -> setStateDraftPickAI
+    )
+
+-- Handles the draft.
 handleDraftPick
   :: forall sig m.
     (Has (State Game) sig m, Has RandomEffect sig m, Effect sig)
@@ -298,6 +368,51 @@ handleDraftPick x = do
     if null toPick
     then setStatePickCard
     else setStateDraftPick
+
+-- Handles the draft.
+handleDraftPickPlayer
+  :: forall sig m. (Has (State Game) sig m, Effect sig)
+  => Int
+  -> m ()
+handleDraftPickPlayer x = do
+  pickedCards :: (Card, Card) <- zoomy @Game #gameUndraftedCards (pluck' x)
+  modifying @Game (#gamePlayer1 . #playerHand) (pickedCards ^.. both ++)
+  modifying @Game #gameDraftOrder tail
+
+  toPick <- use @Game #gameUndraftedCards
+  modify
+    if null toPick
+    then setStatePickCard
+    else \game ->
+      let p = head $ gameDraftOrder game
+      in game
+        & case p of
+          Player1 -> setStateDraftPickPlayer
+          _ -> setStateDraftPickAI
+
+-- Handles the draft.
+handleDraftPickAI
+  :: forall sig m.
+    (Has (State Game) sig m, Has RandomEffect sig m, Effect sig)
+  => m ()
+handleDraftPickAI = do
+  ~(playerNum:order) <- use @Game #gameDraftOrder
+  let
+    player :: Lens' Game Player
+    player = playerNumToPlayer playerNum
+  aiDraftCards player
+
+  toPick <- use @Game #gameUndraftedCards
+  modify
+    if null toPick
+    then setStatePickCard
+    else \game ->
+      let (p:order') = order
+      in game
+        & #gameDraftOrder .~ order'
+        & case p of
+          Player1 -> setStateDraftPickPlayer
+          _ -> setStateDraftPickAI
 
 -- Drafts cards for an AI player
 -- Currently picks randomly

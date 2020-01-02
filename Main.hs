@@ -51,6 +51,8 @@ loop' game = do
       loop ["Round " ++ show (game ^. #gameRound) ++ ":"]
         =<< (next & runRandom)
 
+    DraftBegan2 _ -> error "Not yet implemented DraftBegan2"
+
     DraftPick next -> do
       let
         again = do
@@ -60,6 +62,10 @@ loop' game = do
             Nothing -> again
             Just action -> action & runRandom >>= loop []
       again
+
+    DraftPickPlayer _ -> error "Not yet implemented DraftPickPlayer"
+
+    DraftPickAI _ -> error "Not yet implemented DraftPickAI"
 
     PickCard next -> do
       let
