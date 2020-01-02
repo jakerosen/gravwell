@@ -69,6 +69,11 @@ loop' game = do
       (output, game') <- next & runRandom & runWriter
       loop output game'
 
+    RoundBegan next -> do
+      putStrLn "Press enter to start."
+      void getLine
+      loop [] next
+
     PickCard next -> do
       let
         again = do

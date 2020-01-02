@@ -46,6 +46,8 @@ data GameState
       (Has RandomEffect sig m, Has (Writer [String]) sig m, Effect sig)
     => m Game)
 
+  | RoundBegan Game
+
   | PickCard (forall sig m.
       (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
 
@@ -59,6 +61,7 @@ instance Show GameState where
     DraftBegan{} -> "DraftBegan"
     DraftPickPlayer{} -> "DraftPickPlayer"
     DraftPickAI{} -> "DraftPickAI"
+    RoundBegan{} -> "RoundBegan"
     PickCard{} -> "PickCard"
     ResolvingMovement{} -> "ResolvingMovement"
     RoundEnded{} -> "RoundEnded"
@@ -219,7 +222,7 @@ setStateDraftBegan game0 = game1
     game1 = game0
       { gameState = DraftBegan (handleDraftBegan & execState game1) }
 
--- Sets the game state of this Game to DraftBegan
+-- Sets the game state of this Game to DraftPickPlayer
 setStateDraftPickPlayer :: Game -> Game
 setStateDraftPickPlayer game0 = game1
   where
@@ -232,13 +235,24 @@ setStateDraftPickPlayer game0 = game1
     game1 = game0
       { gameState = DraftPickPlayer f }
 
--- Sets the game state of this Game to DraftBegan
+-- Sets the game state of this Game to DraftPickAI
 setStateDraftPickAI :: Game -> Game
 setStateDraftPickAI game0 = game1
   where
     game1 :: Game
     game1 = game0
       { gameState = DraftPickAI (handleDraftPickAI & execState game1) }
+
+-- Sets the game state of this Game to RoundBegan
+setStateRoundBegan :: Game -> Game
+setStateRoundBegan game0 = game1
+  where
+    game1 :: Game
+    game1 = game0
+      { gameState = RoundBegan game2 }
+
+    game2 :: Game
+    game2 = setStatePickCard game1
 
 -- Sets the game state of this Game to RoundEnded
 setStateRoundEnded :: Game -> Game
@@ -314,7 +328,7 @@ handleDraftPickPlayer x = do
   toPick <- use @Game #gameUndraftedCards
   modify
     if null toPick
-    then setStatePickCard
+    then setStateRoundBegan
     else \game ->
       let p = head $ gameDraftOrder game
       in game
@@ -337,7 +351,7 @@ handleDraftPickAI = do
   toPick <- use @Game #gameUndraftedCards
   modify
     if null toPick
-    then setStatePickCard
+    then setStateRoundBegan
     else \game ->
       let p = head order
       in game
