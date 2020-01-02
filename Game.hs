@@ -291,6 +291,7 @@ handleDraftBegan
   :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
 handleDraftBegan = do
   deck' <- shuffleCards deck
+  game0 <- get @Game
   let
     numPiles = numPlayers * 3
     usedCards = take (numPiles * 2) deck'
@@ -300,14 +301,19 @@ handleDraftBegan = do
     piles = uncurry zip (splitAt numPiles usedCards)
 
     order :: [PlayerNum]
-    order = concat $ replicate 3 [minBound .. maxBound]
+    order = sortOn
+      (\playerNum -> game0 ^. playerNumToPlayer playerNum . #playerShip)
+      [minBound .. maxBound]
+
+    orderOfDraft :: [PlayerNum]
+    orderOfDraft = concat $ replicate 3 order
 
     p1 :: PlayerNum
-    p1 = head order
+    p1 = head orderOfDraft
 
   modify @Game (\game -> game
     & #gameUndraftedCards .~ piles
-    & #gameDraftOrder .~ order
+    & #gameDraftOrder .~ orderOfDraft
     & case p1 of
       Player1 -> setStateDraftPickPlayer
       _ -> setStateDraftPickAI
