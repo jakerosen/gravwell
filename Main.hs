@@ -51,21 +51,23 @@ loop' game = do
       loop ["Round " ++ show (game ^. #gameRound) ++ ":"]
         =<< (next & runRandom)
 
-    DraftBegan2 _ -> error "Not yet implemented DraftBegan2"
-
-    DraftPick next -> do
+    DraftPickPlayer next -> do
       let
         again = do
           putStrLn "Pick a card."
           x <- getInt
           case next x of
             Nothing -> again
-            Just action -> action & runRandom >>= loop []
+            Just action -> do
+              (output, game') <- action & runRandom & runWriter
+              loop output game'
       again
 
-    DraftPickPlayer _ -> error "Not yet implemented DraftPickPlayer"
-
-    DraftPickAI _ -> error "Not yet implemented DraftPickAI"
+    DraftPickAI next -> do
+      putStrLn "AI picking. Press enter to continue."
+      _ <- getLine
+      (output, game') <- next & runRandom & runWriter
+      loop output game'
 
     PickCard next -> do
       let
@@ -125,7 +127,21 @@ displayGame game@Game{..} output = do
 
 
   case gameState of
-    DraftPick _ -> do
+    DraftPickPlayer _ -> do
+      let
+        visible :: [Card]
+        visible = game ^. #gameUndraftedCards & map fst
+
+      foldlM_
+        ( \n card -> do
+            m <- displayCard ( 5, n ) card
+            putStr ", "
+            pure ( n + m + 2 )
+        )
+        0
+        visible
+
+    DraftPickAI _ -> do
       let
         visible :: [Card]
         visible = game ^. #gameUndraftedCards & map fst
