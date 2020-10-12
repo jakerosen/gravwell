@@ -45,6 +45,7 @@ pluck n xs =
 -- State based version of pluck (which can be zoomed with zoomy)
 pluck'
   :: (Eq a, Has (State [a]) sig m, Effect sig)
+  -- :: (Eq a, Has (State [a]) sig m)
   => Int
   -> m a
 pluck' n = do

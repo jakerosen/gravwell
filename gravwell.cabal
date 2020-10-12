@@ -14,7 +14,7 @@ executable gravwell
     generic-lens,
     MonadRandom,
     mtl,
-    fused-effects,
+    fused-effects == 1.0.0.0,
     fused-effects-lens,
   default-extensions:
     BlockArguments
