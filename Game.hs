@@ -37,22 +37,22 @@ data Game = Game
 -- The current game state to be parsed by the UI
 data GameState
   = DraftBegan (forall sig m.
-      (Has RandomEffect sig m, Effect sig) => m Game)
+      (Has RandomEffect sig m) => m Game)
 
   | DraftPickPlayer (forall sig m.
-      (Has (Writer [String]) sig m, Effect sig) => Int -> Maybe (m Game))
+      (Has (Writer [String]) sig m) => Int -> Maybe (m Game))
 
   | DraftPickAI (forall sig m.
-      (Has RandomEffect sig m, Has (Writer [String]) sig m, Effect sig)
+      (Has RandomEffect sig m, Has (Writer [String]) sig m)
     => m Game)
 
   | RoundBegan Game
 
   | PickCard (forall sig m.
-      (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game))
+      (Has RandomEffect sig m) => Int -> Maybe (m Game))
 
   | ResolvingMovement (forall sig m.
-      (Has (Writer [String]) sig m, Effect sig) => m Game)
+      (Has (Writer [String]) sig m) => m Game)
 
   | RoundEnded Game
 
@@ -198,7 +198,7 @@ setStatePickCard game0 = game1
     --   then Nothing
     --   else Just $ handlePlayCard x game1
 
-    f :: (Has RandomEffect sig m, Effect sig) => Int -> Maybe (m Game)
+    f :: (Has RandomEffect sig m) => Int -> Maybe (m Game)
     f x = if x >= length (game1 ^. #gamePlayer1 . #playerHand)
       then Nothing
       else Just (handlePickCards x & execState game1)
@@ -226,7 +226,7 @@ setStateDraftBegan game0 = game1
 setStateDraftPickPlayer :: Game -> Game
 setStateDraftPickPlayer game0 = game1
   where
-    f :: (Has (Writer [String]) sig m, Effect sig) => Int -> Maybe (m Game)
+    f :: (Has (Writer [String]) sig m) => Int -> Maybe (m Game)
     f x = if x >= length (game1 ^. #gameUndraftedCards)
       then Nothing
       else Just (handleDraftPickPlayer x & execState game1)
@@ -266,7 +266,7 @@ setStateRoundEnded game0 = game1
 
 -- Handles resolving a played card.
 handleResolveCard
-  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m)
   => m ()
 handleResolveCard = do
   ~((playerNum, card):cards) <- use @Game #gameUnplayedCards
@@ -288,7 +288,7 @@ handleResolveCard = do
 -- Handles the draft.
 -- Currently just assigns 6 random cards to each player.
 handleDraftBegan
-  :: (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => m ()
+  :: (Has (State Game) sig m, Has RandomEffect sig m) => m ()
 handleDraftBegan = do
   deck' <- shuffleCards deck
   game0 <- get @Game
@@ -322,7 +322,7 @@ handleDraftBegan = do
 -- Handles the draft.
 handleDraftPickPlayer
   :: forall sig m.
-    (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+    (Has (State Game) sig m, Has (Writer [String]) sig m)
   => Int
   -> m ()
 handleDraftPickPlayer x = do
@@ -348,7 +348,7 @@ handleDraftPickAI
     ( Has (State Game) sig m
     , Has (Writer [String]) sig m
     , Has RandomEffect sig m
-    , Effect sig )
+    )
   => m ()
 handleDraftPickAI = do
   ~(playerNum:order) <- use @Game #gameDraftOrder
@@ -372,7 +372,7 @@ aiDraftCards
   :: ( Has RandomEffect sig m
      , Has (Writer [String]) sig m
      , Has (State Game) sig m
-     , Effect sig )
+     )
   => PlayerNum
   -> m ()
 aiDraftCards playerNum = do
@@ -388,7 +388,7 @@ aiDraftCards playerNum = do
 -- Pick card for an AI player
 -- Currently picks randomly
 aiPickCard
-  :: (Has RandomEffect sig m, Has (State Player) sig m, Effect sig)
+  :: (Has RandomEffect sig m, Has (State Player) sig m)
   => m Card
 aiPickCard = do
   player :: Player <- get
@@ -400,7 +400,7 @@ aiPickCard = do
 -- handle the picks for all of the players, with the given index chosen by
 -- the player. This index must be valid.
 handlePickCards :: forall sig m.
-  (Has (State Game) sig m, Has RandomEffect sig m, Effect sig) => Int -> m ()
+  (Has (State Game) sig m, Has RandomEffect sig m) => Int -> m ()
 handlePickCards x = do
   let
     aiPicks :: m ()
@@ -430,7 +430,7 @@ l = id
 
 -- Play this Card and determine the resulting Game
 playCard
-  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m)
   => Card
   -> PlayerNum
   -> m ()
@@ -497,7 +497,7 @@ moveShip ships f fuel start =
 
 -- monadic version of moveship
 moveShip'
-  :: (Has (State Game) sig m, Has (Writer [String]) sig m, Effect sig)
+  :: (Has (State Game) sig m, Has (Writer [String]) sig m)
   => Int -- fuel amount
   -> (Int -> Int) -- motion
   -> ShipNum -- The moving ship

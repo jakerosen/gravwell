@@ -14,7 +14,7 @@ executable gravwell
     generic-lens,
     MonadRandom,
     mtl,
-    fused-effects == 1.0.0.0,
+    fused-effects == 1.1.0.0,
     fused-effects-lens,
   default-extensions:
     BlockArguments
@@ -32,6 +32,8 @@ executable gravwell
     DeriveAnyClass
     GeneralizedNewtypeDeriving
     InstanceSigs
+    KindSignatures
+    GADTs
   default-language: Haskell2010
   ghc-options: -Wall
   main-is: Main.hs
