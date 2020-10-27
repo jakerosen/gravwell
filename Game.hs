@@ -84,7 +84,7 @@ data ShipNum
 
 -- The initial game
 initialGame :: Game
-initialGame = setStateDraftBegan
+initialGame =
   Game
     { gamePlayer1 = Player 0 []
     , gamePlayer2 = Player 0 []
@@ -97,7 +97,7 @@ initialGame = setStateDraftBegan
     , gameUnplayedCards = []
     , gameUndraftedCards = []
     , gameDraftOrder = []
-    }
+    } & setStateDraftBegan
 
 -- The current number of players supported
 numPlayers :: Int

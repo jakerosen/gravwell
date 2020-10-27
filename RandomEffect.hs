@@ -27,7 +27,7 @@ instance (Algebra sig m, MonadIO m) =>
     alg
       :: Functor ctx
       => Handler ctx n (RandomCarrier m)
-      -> (:+:) RandomEffect sig n a
+      -> (RandomEffect :+: sig) n a
       -> ctx ()
       -> RandomCarrier m (ctx a)
     alg hdl sig ctx = RandomCarrier $ case sig of
